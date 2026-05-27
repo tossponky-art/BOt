@@ -490,6 +490,10 @@ async function checkTelegramCommands() {
 
   try {
 
+    console.log(
+      "Checking Telegram commands..."
+    );
+
     const res =
 
       await axios.get(
@@ -501,19 +505,79 @@ async function checkTelegramCommands() {
     const updates =
       res.data.result;
 
+    console.log(
+      "Updates:",
+      updates.length
+    );
+
     for (const update of updates) {
 
       lastUpdateId =
         update.update_id;
 
       const text =
-
         update.message?.text;
 
-      // เปลี่ยน topics
-      if (
+      console.log(
+        "Message:",
+        text
+      );
 
-        text &&
+      if (
+        !text
+      ) continue;
+
+      // /ping
+      if (
+        text === "/ping"
+      ) {
+
+        await axios.post(
+
+          `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+
+          {
+
+            chat_id:
+
+              update.message.chat.id,
+
+            text:
+              "🏓 BOT ONLINE"
+
+          }
+
+        );
+      }
+
+      // /topics
+      if (
+        text === "/topics"
+      ) {
+
+        await axios.post(
+
+          `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+
+          {
+
+            chat_id:
+
+              update.message.chat.id,
+
+            text:
+
+`📡 Topics ปัจจุบัน
+
+${topics.join("\n")}`
+
+          }
+
+        );
+      }
+
+      // /topic
+      if (
 
         text.startsWith("/topic ")
 
@@ -583,6 +647,11 @@ async function checkTelegramCommands() {
 
         cache.del("news");
 
+        console.log(
+          "Topics updated:",
+          topics
+        );
+
         await axios.post(
 
           `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
@@ -591,8 +660,7 @@ async function checkTelegramCommands() {
 
             chat_id:
 
-              process.env
-                .TELEGRAM_CHAT_ID,
+              update.message.chat.id,
 
             text:
 
@@ -605,44 +673,16 @@ ${topics.join("\n")}
           }
 
         );
-
-        console.log(
-          "Topics updated:",
-          topics
-        );
-      }
-
-      // ดู topics
-      if (text === "/topics") {
-
-        await axios.post(
-
-          `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
-
-          {
-
-            chat_id:
-
-              process.env
-                .TELEGRAM_CHAT_ID,
-
-            text:
-
-`📡 Topics ปัจจุบัน
-
-${topics.join("\n")}`
-
-          }
-
-        );
-
       }
     }
 
   } catch (e) {
 
     console.log(
-      "Telegram Command Error:",
+      "Telegram Command Error:"
+    );
+
+    console.log(
       e.message
     );
 
@@ -760,7 +800,7 @@ cron.schedule(
   }
 );
 
-// เช็ก Telegram commands ทุก 1 นาที
+// เช็ก commands ทุก 1 นาที
 cron.schedule(
 
   "*/1 * * * *",
