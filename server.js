@@ -2,7 +2,6 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import axios from "axios";
-import cron from "node-cron";
 import NodeCache from "node-cache";
 import Parser from "rss-parser";
 
@@ -22,10 +21,7 @@ app.use(express.json());
 const PORT =
   process.env.PORT || 3000;
 
-const BASE_URL =
-  "https://newsbot-ecau.onrender.com";
-
-// TOPICS ปัจจุบัน
+// TOPICS
 let topics = [
   "AI",
   "crypto",
@@ -47,9 +43,6 @@ const topicMap = {
   "เอไอ":
     "AI",
 
-  "AI":
-    "AI",
-
   "ข่าวเกาหลี":
     "Korea news",
 
@@ -69,17 +62,11 @@ const topicMap = {
     "nvidia",
 
   "ทีเอสเอ็มซี":
-    "tsmc",
-
-  "ตลาดโลก":
-    "global market",
-
-  "ข่าวเทค":
-    "technology"
+    "tsmc"
 
 };
 
-// สร้าง RSS feeds
+// BUILD FEEDS
 function buildFeeds() {
 
   return topics.map(
@@ -91,14 +78,16 @@ function buildFeeds() {
   );
 }
 
-// translate
-async function translateText(text) {
+// TRANSLATE
+async function translateText(
+  text,
+  target = "th"
+) {
 
   try {
 
-    if (!text) {
+    if (!text)
       return "ไม่มีข้อมูล";
-    }
 
     const url =
 
@@ -106,7 +95,7 @@ async function translateText(text) {
 
       encodeURIComponent(text) +
 
-      "&langpair=en|th";
+      `&langpair=auto|${target}`;
 
     const res =
       await axios.get(url);
@@ -121,27 +110,19 @@ async function translateText(text) {
       translated !== text
     ) {
 
-      console.log(
-        "API Translate:",
-        translated
-      );
-
       return translated;
+
     }
 
-    throw new Error();
+    return text;
 
   } catch {
-
-    console.log(
-      "Translate fallback"
-    );
 
     return text;
   }
 }
 
-// sentiment
+// SENTIMENT
 function analyzeSentiment(title) {
 
   const bullishWords = [
@@ -205,20 +186,14 @@ function analyzeSentiment(title) {
   };
 }
 
-// fetch news
+// FETCH NEWS
 async function fetchFeeds() {
 
   const cached =
     cache.get("news");
 
-  if (cached) {
-
-    console.log(
-      "Using cache"
-    );
-
+  if (cached)
     return cached;
-  }
 
   const feeds =
     buildFeeds();
@@ -228,11 +203,6 @@ async function fetchFeeds() {
   for (const url of feeds) {
 
     try {
-
-      console.log(
-        "Fetching:",
-        url
-      );
 
       const feed =
         await parser.parseURL(
@@ -284,17 +254,10 @@ async function fetchFeeds() {
 
       all.push(...items);
 
-    } catch (e) {
-
-      console.log(
-        "Feed Error:",
-        url
-      );
-
-    }
+    } catch {}
   }
 
-  // กันข่าวซ้ำ
+  // กันซ้ำ
   const unique = [];
 
   const seen =
@@ -321,15 +284,10 @@ async function fetchFeeds() {
     all
   );
 
-  console.log(
-    "Total news:",
-    all.length
-  );
-
   return all;
 }
 
-// send telegram
+// SEND TELEGRAM
 async function sendTelegram(news) {
 
   const analysis =
@@ -395,15 +353,9 @@ ${news.url}
 
     );
 
-    console.log(
-      "Sent:",
-      news.title
-    );
-
   } catch (e) {
 
     console.log(
-      "Telegram Error:",
       e.message
     );
 
@@ -439,6 +391,9 @@ async function checkTelegramCommands() {
       if (!text)
         continue;
 
+      const chatId =
+        update.message.chat.id;
+
       // PING
       if (
         text === "/ping"
@@ -451,7 +406,7 @@ async function checkTelegramCommands() {
           {
 
             chat_id:
-              update.message.chat.id,
+              chatId,
 
             text:
               "🏓 BOT ONLINE"
@@ -473,7 +428,7 @@ async function checkTelegramCommands() {
           {
 
             chat_id:
-              update.message.chat.id,
+              chatId,
 
             text:
 
@@ -498,7 +453,7 @@ ${topics.join("\n")}`
           {
 
             chat_id:
-              update.message.chat.id,
+              chatId,
 
             text:
               "📡 เลือกหัวข้อข่าว",
@@ -528,23 +483,9 @@ ${topics.join("\n")}`
                   },
 
                   {
-                    text: "🪙 Bitcoin",
-                    callback_data:
-                      "bitcoin"
-                  }
-                ],
-
-                [
-                  {
                     text: "🟢 NVIDIA",
                     callback_data:
                       "nvidia"
-                  },
-
-                  {
-                    text: "⚙️ TSMC",
-                    callback_data:
-                      "tsmc"
                   }
                 ],
 
@@ -585,9 +526,132 @@ ${topics.join("\n")}`
 
         );
       }
+
+      // /topic
+      if (
+        text.startsWith("/topic ")
+      ) {
+
+        const raw =
+
+          text.replace(
+            "/topic ",
+            ""
+          );
+
+        topics =
+
+          raw
+            .split(",")
+
+            .map(
+              x => x.trim()
+            )
+
+            .map(t => {
+
+              return (
+                topicMap[t] || t
+              );
+
+            });
+
+        cache.del("news");
+
+        await axios.post(
+
+          `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+
+          {
+
+            chat_id:
+              chatId,
+
+            text:
+
+`✅ เปลี่ยน Topics แล้ว
+
+${topics.join("\n")}`
+
+          }
+
+        );
+      }
+
+      // /th
+      if (
+        text.startsWith("/th ")
+      ) {
+
+        const raw =
+
+          text.replace(
+            "/th ",
+            ""
+          );
+
+        const translated =
+
+          await translateText(
+            raw,
+            "th"
+          );
+
+        await axios.post(
+
+          `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+
+          {
+
+            chat_id:
+              chatId,
+
+            text:
+              translated
+
+          }
+
+        );
+      }
+
+      // /en
+      if (
+        text.startsWith("/en ")
+      ) {
+
+        const raw =
+
+          text.replace(
+            "/en ",
+            ""
+          );
+
+        const translated =
+
+          await translateText(
+            raw,
+            "en"
+          );
+
+        await axios.post(
+
+          `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+
+          {
+
+            chat_id:
+              chatId,
+
+            text:
+              translated
+
+          }
+
+        );
+      }
     }
 
-    // CALLBACK BUTTONS
+    // BUTTON CALLBACKS
     for (const update of updates) {
 
       if (
@@ -620,9 +684,7 @@ ${topics.join("\n")}`
 
 `✅ เปลี่ยน Topic แล้ว
 
-📡 ${data}
-
-⏳ รอ fetch รอบถัดไป`
+📡 ${data}`
 
           }
 
@@ -633,14 +695,13 @@ ${topics.join("\n")}`
   } catch (e) {
 
     console.log(
-      "Telegram Command Error:",
       e.message
     );
 
   }
 }
 
-// homepage
+// HOME
 app.get("/", (req, res) => {
 
   res.send(
@@ -674,16 +735,10 @@ app.get(
   }
 );
 
-// AUTO FETCH
-cron.schedule(
-
-  "*/5 * * * *",
+// AUTO NEWS
+setInterval(
 
   async () => {
-
-    console.log(
-      "AUTO FETCH RUNNING"
-    );
 
     try {
 
@@ -703,62 +758,26 @@ cron.schedule(
 
       }
 
-      console.log(
-        "Sent to Telegram"
-      );
-
-    } catch (e) {
-
-      console.log(
-        e.message
-      );
-
-    }
-  }
-);
-
-// CHECK COMMANDS
-cron.schedule(
-
-  "*/1 * * * *",
-
-  async () => {
-
-    await checkTelegramCommands();
-
-  }
-);
-
-// SELF PING
-setInterval(
-
-  async () => {
-
-    try {
-
-      await axios.get(
-        BASE_URL
-      );
-
-      console.log(
-        "Self ping success"
-      );
-
-    } catch (e) {
-
-      console.log(
-        "Ping Error:",
-        e.message
-      );
-
-    }
+    } catch {}
 
   },
 
   300000
 );
 
-// START SERVER
+// REALTIME COMMANDS
+setInterval(
+
+  async () => {
+
+    await checkTelegramCommands();
+
+  },
+
+  5000
+);
+
+// START
 app.listen(
 
   PORT,
@@ -767,10 +786,6 @@ app.listen(
 
     console.log(
       `Server running on ${PORT}`
-    );
-
-    console.log(
-      "FIRST FETCH START"
     );
 
     try {
@@ -789,16 +804,7 @@ app.listen(
 
       }
 
-      console.log(
-        "FIRST FETCH DONE"
-      );
+    } catch {}
 
-    } catch (e) {
-
-      console.log(
-        e.message
-      );
-
-    }
   }
 );
