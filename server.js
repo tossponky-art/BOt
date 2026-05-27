@@ -19,10 +19,10 @@ app.use(express.json());
 const PORT = process.env.PORT || 3000;
 
 const feeds = [
-  "https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml",
-  "https://feeds.feedburner.com/CoinDesk",
-  "https://www.reddit.com/r/technology/hot.rss",
-  "https://www.reddit.com/r/CryptoCurrency/hot.rss"
+  "https://www.reddit.com/r/artificial/hot.rss",
+  "https://www.reddit.com/r/stocks/hot.rss",
+  "https://news.google.com/rss/search?q=nvidia",
+  "https://news.google.com/rss/search?q=tsmc"
 ];
 
 async function fetchFeeds() {
