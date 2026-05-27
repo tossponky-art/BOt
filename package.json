@@ -1,16 +1,18 @@
+writing{variant=“standard” id=“58021”}
 {
-  "name": "ai-news-bot-frontend",
-  "version": "1.0.0",
-  "private": true,
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build"
-  },
-  "dependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
-  },
-  "devDependencies": {
-    "vite": "^5.3.1"
-  }
+“name”: “ai-news-bot”,
+“version”: “1.0.0”,
+“type”: “module”,
+“scripts”: {
+“start”: “node server.js”
+},
+“dependencies”: {
+“axios”: “^1.7.2”,
+“cors”: “^2.8.5”,
+“dotenv”: “^16.4.5”,
+“express”: “^4.19.2”,
+“node-cache”: “^5.1.2”,
+“node-cron”: “^3.0",
+“rss-parser”: “^3.13.0”
+}
 }
