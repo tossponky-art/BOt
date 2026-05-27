@@ -26,37 +26,32 @@ const PORT =
 const BASE_URL =
   "https://newsbot-ecau.onrender.com";
 
-// ข่าวทั้งหมด
-const feeds = [
+// TOPICS เริ่มต้น
+let topics = [
 
-  // AI
-  "https://news.google.com/rss/search?q=AI",
+  "AI",
 
-  // หุ้น
-  "https://news.google.com/rss/search?q=stock+market",
+  "crypto",
 
-  // Crypto
-  "https://news.google.com/rss/search?q=crypto",
+  "nvidia",
 
-  // NVIDIA
-  "https://news.google.com/rss/search?q=nvidia",
+  "stock market",
 
-  // TSMC
-  "https://news.google.com/rss/search?q=tsmc",
-
-  // ข่าวแรงงานเกาหลี
-  "https://news.google.com/rss/search?q=Korea+illegal+workers",
-
-  "https://news.google.com/rss/search?q=Yangsan+immigration",
-
-  "https://news.google.com/rss/search?q=Yangsan+foreign+worker+raid",
-
-  "https://news.google.com/rss/search?q=Seochang+Korea",
-
-  // CoinDesk
-  "https://feeds.feedburner.com/CoinDesk"
+  "Korea illegal workers"
 
 ];
+
+// สร้าง RSS feeds
+function buildFeeds() {
+
+  return topics.map(
+
+    t =>
+
+      `https://news.google.com/rss/search?q=${encodeURIComponent(t)}`
+
+  );
+}
 
 // แปลภาษา
 async function translateText(text) {
@@ -64,7 +59,9 @@ async function translateText(text) {
   try {
 
     if (!text) {
+
       return "ไม่มีข้อมูล";
+
     }
 
     const url =
@@ -79,6 +76,7 @@ async function translateText(text) {
       await axios.get(url);
 
     const translated =
+
       res.data.responseData
         .translatedText;
 
@@ -142,7 +140,9 @@ function analyzeSentiment(title) {
   bullishWords.forEach(w => {
 
     if (lower.includes(w)) {
+
       score += 20;
+
     }
 
   });
@@ -150,7 +150,9 @@ function analyzeSentiment(title) {
   bearishWords.forEach(w => {
 
     if (lower.includes(w)) {
+
       score -= 20;
+
     }
 
   });
@@ -159,16 +161,23 @@ function analyzeSentiment(title) {
     "NEUTRAL";
 
   if (score > 0) {
+
     sentiment = "BULLISH";
+
   }
 
   if (score < 0) {
+
     sentiment = "BEARISH";
+
   }
 
   return {
+
     sentiment,
+
     score
+
   };
 }
 
@@ -187,6 +196,9 @@ async function fetchFeeds() {
     return cached;
   }
 
+  const feeds =
+    buildFeeds();
+
   let all = [];
 
   for (const url of feeds) {
@@ -199,22 +211,27 @@ async function fetchFeeds() {
       );
 
       const feed =
+
         await parser.parseURL(
           url
         );
 
       const items =
+
         await Promise.all(
 
           feed.items
             .slice(0, 5)
+
             .map(
+
               async (x, i) => ({
 
                 id:
                   `${Date.now()}-${i}`,
 
                 title:
+
                   await translateText(
 
                     x.title ||
@@ -224,10 +241,13 @@ async function fetchFeeds() {
                   ),
 
                 source:
+
                   feed.title ||
+
                   "Unknown Source",
 
                 summary:
+
                   await translateText(
 
                     x.contentSnippet ||
@@ -251,7 +271,9 @@ async function fetchFeeds() {
                     .toISOString()
 
               })
+
             )
+
         );
 
       all.push(...items);
@@ -309,6 +331,7 @@ async function fetchFeeds() {
 async function sendTelegram(news) {
 
   const analysis =
+
     analyzeSentiment(
       news.title
     );
@@ -360,17 +383,21 @@ ${news.url}
       {
 
         chat_id:
+
           process.env
             .TELEGRAM_CHAT_ID,
 
-        text: message,
+        text:
+          message,
 
         parse_mode:
           "HTML",
 
         disable_web_page_preview:
           false
+
       }
+
     );
 
     console.log(
@@ -382,6 +409,125 @@ ${news.url}
 
     console.log(
       "Telegram Error:",
+      e.message
+    );
+
+  }
+}
+
+// Telegram Commands
+let lastUpdateId = 0;
+
+async function checkTelegramCommands() {
+
+  try {
+
+    const res =
+
+      await axios.get(
+
+        `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/getUpdates?offset=${lastUpdateId + 1}`
+
+      );
+
+    const updates =
+      res.data.result;
+
+    for (const update of updates) {
+
+      lastUpdateId =
+        update.update_id;
+
+      const text =
+
+        update.message?.text;
+
+      if (
+
+        text &&
+
+        text.startsWith("/topic ")
+
+      ) {
+
+        const raw =
+
+          text.replace(
+            "/topic ",
+            ""
+          );
+
+        topics =
+
+          raw
+            .split(",")
+
+            .map(
+              x => x.trim()
+            );
+
+        cache.del("news");
+
+        await axios.post(
+
+          `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+
+          {
+
+            chat_id:
+
+              process.env
+                .TELEGRAM_CHAT_ID,
+
+            text:
+
+`✅ เปลี่ยน Topics แล้ว
+
+${topics.join("\n")}
+
+⏳ รอรอบ fetch ถัดไป`
+
+          }
+
+        );
+
+        console.log(
+          "Topics updated:",
+          topics
+        );
+      }
+
+      // ดู topics ปัจจุบัน
+      if (text === "/topics") {
+
+        await axios.post(
+
+          `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+
+          {
+
+            chat_id:
+
+              process.env
+                .TELEGRAM_CHAT_ID,
+
+            text:
+
+`📡 Topics ปัจจุบัน
+
+${topics.join("\n")}`
+
+          }
+
+        );
+
+      }
+    }
+
+  } catch (e) {
+
+    console.log(
+      "Telegram Command Error:",
       e.message
     );
 
@@ -413,12 +559,15 @@ app.get(
         news
 
           .map(n => ({
+
             ...n,
 
             analysis:
+
               analyzeSentiment(
                 n.title
               )
+
           }))
 
           .sort(
@@ -443,8 +592,10 @@ app.get(
 
       res.status(500)
         .json({
+
           error:
             e.message
+
         });
 
     }
@@ -479,7 +630,7 @@ app.post(
   }
 );
 
-// ทุก 5 นาที
+// ข่าวทุก 5 นาที
 cron.schedule(
 
   "*/5 * * * *",
@@ -520,7 +671,19 @@ cron.schedule(
   }
 );
 
-// Ping กัน Render หลับ
+// เช็ก Telegram Commands ทุก 1 นาที
+cron.schedule(
+
+  "*/1 * * * *",
+
+  async () => {
+
+    await checkTelegramCommands();
+
+  }
+);
+
+// กัน Render หลับ
 setInterval(
 
   async () => {
