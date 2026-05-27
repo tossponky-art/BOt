@@ -26,16 +26,17 @@ const PORT =
 const BASE_URL =
   "https://newsbot-ecau.onrender.com";
 
+// ข่าวทั้งหมด
 const feeds = [
 
   // AI
-  "https://www.reddit.com/r/artificial/hot.rss",
+  "https://news.google.com/rss/search?q=AI",
 
   // หุ้น
-  "https://www.reddit.com/r/stocks/hot.rss",
+  "https://news.google.com/rss/search?q=stock+market",
 
   // Crypto
-  "https://www.reddit.com/r/CryptoCurrency/hot.rss",
+  "https://news.google.com/rss/search?q=crypto",
 
   // NVIDIA
   "https://news.google.com/rss/search?q=nvidia",
@@ -57,7 +58,7 @@ const feeds = [
 
 ];
 
-// แปลไทย
+// แปลภาษา
 async function translateText(text) {
 
   try {
@@ -66,30 +67,20 @@ async function translateText(text) {
       return "ไม่มีข้อมูล";
     }
 
+    const url =
+
+      "https://api.mymemory.translated.net/get?q=" +
+
+      encodeURIComponent(text) +
+
+      "&langpair=en|th";
+
     const res =
-      await axios.post(
-
-        "https://libretranslate.de/translate",
-
-        {
-          q: text,
-          source: "auto",
-          target: "th",
-          format: "text"
-        },
-
-        {
-          headers: {
-            "Content-Type":
-              "application/json"
-          },
-
-          timeout: 10000
-        }
-      );
+      await axios.get(url);
 
     const translated =
-      res.data.translatedText;
+      res.data.responseData
+        .translatedText;
 
     console.log(
       "Translated:",
@@ -109,7 +100,7 @@ async function translateText(text) {
   }
 }
 
-// วิเคราะห์ sentiment
+// sentiment
 function analyzeSentiment(title) {
 
   const bullishWords = [
@@ -225,8 +216,11 @@ async function fetchFeeds() {
 
                 title:
                   await translateText(
+
                     x.title ||
+
                     "ไม่มีหัวข้อข่าว"
+
                   ),
 
                 source:
@@ -250,6 +244,7 @@ async function fetchFeeds() {
                   x.link,
 
                 time:
+
                   x.pubDate ||
 
                   new Date()
@@ -393,7 +388,7 @@ ${news.url}
   }
 }
 
-// หน้าแรก
+// หน้าเว็บ
 app.get("/", (req, res) => {
 
   res.send(
@@ -525,7 +520,7 @@ cron.schedule(
   }
 );
 
-// กัน Render หลับ
+// Ping กัน Render หลับ
 setInterval(
 
   async () => {
