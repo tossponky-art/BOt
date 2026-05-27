@@ -21,6 +21,10 @@ app.use(express.json());
 const PORT =
   process.env.PORT || 3000;
 
+// ======================
+// SETTINGS
+// ======================
+
 let newsEnabled = true;
 
 let latestNews = null;
@@ -31,7 +35,10 @@ const sentNews =
 let currentTopic =
   "general";
 
+// ======================
 // FEEDS
+// ======================
+
 const feedMap = {
 
   general: [
@@ -92,7 +99,10 @@ const feedMap = {
 
 };
 
+// ======================
 // CLEAN URL
+// ======================
+
 function cleanGoogleUrl(url) {
 
   try {
@@ -118,7 +128,10 @@ function cleanGoogleUrl(url) {
   }
 }
 
+// ======================
 // TRANSLATE
+// ======================
+
 async function translateText(
   text,
   target = "th"
@@ -143,7 +156,10 @@ async function translateText(
   }
 }
 
+// ======================
 // GROQ AI
+// ======================
+
 async function askAI(prompt) {
 
   try {
@@ -166,7 +182,16 @@ async function askAI(prompt) {
 
             content:
 
-"ตอบเป็นภาษาไทยเสมอ ตอบสั้น กระชับ เข้าใจง่าย"
+`ตอบเป็นภาษาไทยเสมอ
+
+คุณคือ AI Assistant ด้าน:
+- หุ้นโลก
+- AI
+- Crypto
+- ข่าวเกาหลี
+- ข่าวแรงงาน
+
+ตอบสั้น กระชับ เข้าใจง่าย`
 
           },
 
@@ -220,7 +245,10 @@ async function askAI(prompt) {
   }
 }
 
+// ======================
 // SENTIMENT
+// ======================
+
 function analyzeSentiment(title) {
 
   const bullishWords = [
@@ -279,7 +307,10 @@ function analyzeSentiment(title) {
   };
 }
 
-// FETCH
+// ======================
+// FETCH NEWS
+// ======================
+
 async function fetchFeeds() {
 
   const cacheKey =
@@ -299,13 +330,22 @@ async function fetchFeeds() {
 
   let all = [];
 
-  for (const url of feeds) {
+  for (const rawUrl of feeds) {
 
     try {
 
+      // FIX THAI URL
+      const safeUrl =
+        encodeURI(rawUrl);
+
+      console.log(
+        "Fetching:",
+        safeUrl
+      );
+
       const feed =
         await parser.parseURL(
-          url
+          safeUrl
         );
 
       const items =
@@ -318,10 +358,14 @@ async function fetchFeeds() {
               `${Date.now()}-${i}`,
 
             title:
-              x.title,
+              x.title ||
+
+              "ไม่มีหัวข้อข่าว",
 
             source:
-              feed.title,
+              feed.title ||
+
+              "Unknown Source",
 
             summary:
 
@@ -331,7 +375,7 @@ async function fetchFeeds() {
 
             url:
               cleanGoogleUrl(
-                x.link
+                x.link || ""
               ),
 
             time:
@@ -349,12 +393,17 @@ async function fetchFeeds() {
 
       console.log(
         "Feed Error:",
+        rawUrl
+      );
+
+      console.log(
         e.message
       );
 
     }
   }
 
+  // UNIQUE NEWS
   const unique = [];
 
   const seen =
@@ -381,10 +430,17 @@ async function fetchFeeds() {
     all
   );
 
+  console.log(
+    `Fetched ${all.length} news`
+  );
+
   return all;
 }
 
+// ======================
 // SEND TELEGRAM
+// ======================
+
 async function sendTelegram(news) {
 
   try {
@@ -468,6 +524,11 @@ ${news.url}
 
     );
 
+    console.log(
+      "Sent:",
+      news.title
+    );
+
   } catch (e) {
 
     console.log(
@@ -478,7 +539,10 @@ ${news.url}
   }
 }
 
-// TELEGRAM
+// ======================
+// TELEGRAM COMMANDS
+// ======================
+
 let lastUpdateId = 0;
 
 async function checkTelegramCommands() {
@@ -510,7 +574,10 @@ async function checkTelegramCommands() {
       const chatId =
         update.message.chat.id;
 
+      // ======================
       // PING
+      // ======================
+
       if (
         text === "/ping"
       ) {
@@ -532,7 +599,10 @@ async function checkTelegramCommands() {
         );
       }
 
-      // STOP
+      // ======================
+      // STOP NEWS
+      // ======================
+
       if (
         text === "/stop"
       ) {
@@ -549,14 +619,17 @@ async function checkTelegramCommands() {
               chatId,
 
             text:
-              "🛑 ปิดข่าวแล้ว"
+              "🛑 ปิดส่งข่าวแล้ว"
 
           }
 
         );
       }
 
-      // START
+      // ======================
+      // START NEWS
+      // ======================
+
       if (
         text === "/startnews"
       ) {
@@ -575,14 +648,17 @@ async function checkTelegramCommands() {
               chatId,
 
             text:
-              "✅ เปิดข่าวแล้ว"
+              "✅ เปิดส่งข่าวแล้ว"
 
           }
 
         );
       }
 
-      // ASK
+      // ======================
+      // ASK AI
+      // ======================
+
       if (
         text.startsWith("/ask ")
       ) {
@@ -616,7 +692,55 @@ async function checkTelegramCommands() {
         );
       }
 
+      // ======================
+      // TRANSLATE
+      // ======================
+
+      if (
+        text === "แปลไทย"
+      ) {
+
+        if (!latestNews)
+          continue;
+
+        const translatedTitle =
+
+          await translateText(
+            latestNews.title
+          );
+
+        const translatedSummary =
+
+          await translateText(
+            latestNews.summary
+          );
+
+        await axios.post(
+
+`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+
+          {
+
+            chat_id:
+              chatId,
+
+            text:
+
+`📰 ${translatedTitle}
+
+📝 ${translatedSummary}
+
+🔗 ${latestNews.url}`
+
+          }
+
+        );
+      }
+
+      // ======================
       // MENU
+      // ======================
+
       if (
         text === "/menu"
       ) {
@@ -631,7 +755,7 @@ async function checkTelegramCommands() {
               chatId,
 
             text:
-              "📡 เลือกหัวข้อ",
+              "📡 เลือกหัวข้อข่าว",
 
             reply_markup: {
 
@@ -704,7 +828,10 @@ async function checkTelegramCommands() {
       }
     }
 
-    // CALLBACKS
+    // ======================
+    // CALLBACK BUTTONS
+    // ======================
+
     for (const update of updates) {
 
       if (
@@ -727,7 +854,6 @@ async function checkTelegramCommands() {
 
         cache.flushAll();
 
-        // ส่งยืนยัน
         await axios.post(
 
 `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
@@ -774,7 +900,10 @@ async function checkTelegramCommands() {
   }
 }
 
+// ======================
 // HOME
+// ======================
+
 app.get("/", (req, res) => {
 
   res.send(
@@ -783,7 +912,10 @@ app.get("/", (req, res) => {
 
 });
 
+// ======================
 // API
+// ======================
+
 app.get(
   "/api/news",
 
@@ -808,7 +940,10 @@ app.get(
   }
 );
 
+// ======================
 // AUTO NEWS
+// ======================
+
 setInterval(
 
   async () => {
@@ -845,7 +980,10 @@ setInterval(
   300000
 );
 
-// COMMAND LOOP
+// ======================
+// REALTIME COMMAND LOOP
+// ======================
+
 setInterval(
 
   async () => {
@@ -857,7 +995,10 @@ setInterval(
   5000
 );
 
-// START
+// ======================
+// START SERVER
+// ======================
+
 app.listen(
 
   PORT,
