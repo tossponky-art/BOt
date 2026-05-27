@@ -21,47 +21,79 @@ app.use(express.json());
 const PORT =
   process.env.PORT || 3000;
 
+// เปิด/ปิดข่าว
+let newsEnabled = true;
+
+// จำข่าวที่ส่งแล้ว
+const sentNews =
+  new Set();
+
 let latestNews = null;
 
-// TOPICS
-let topics = [
-  "AI",
-  "NVIDIA",
-  "TSMC",
-  "Tesla",
-  "Nasdaq",
-  "Bitcoin",
-  "Korea illegal workers"
-];
+// topic ปัจจุบัน
+let currentTopic =
+  "general";
 
 // FEEDS
-const feeds = [
+const feedMap = {
 
-  // AI ไทย
-  "https://www.beartai.com/feed",
+  general: [
 
-  // Crypto
-  "https://siamblockchain.com/feed",
+    "https://www.beartai.com/feed",
 
-  // หุ้นโลก
-  "https://news.google.com/rss/search?q=Nasdaq&hl=th&gl=TH&ceid=TH:th",
+    "https://siamblockchain.com/feed",
 
-  "https://news.google.com/rss/search?q=NVIDIA&hl=th&gl=TH&ceid=TH:th",
+    "https://news.google.com/rss/search?q=Nasdaq&hl=th&gl=TH&ceid=TH:th"
 
-  "https://news.google.com/rss/search?q=TSMC&hl=th&gl=TH&ceid=TH:th",
+  ],
 
-  "https://news.google.com/rss/search?q=Tesla&hl=th&gl=TH&ceid=TH:th",
+  AI: [
 
-  "https://news.google.com/rss/search?q=Bitcoin&hl=th&gl=TH&ceid=TH:th",
+    "https://www.beartai.com/feed"
 
-  // เกาหลี
-  "https://news.google.com/rss/search?q=แรงงานเกาหลี&hl=th&gl=TH&ceid=TH:th",
+  ],
 
-  "https://news.google.com/rss/search?q=Yangsan+immigration&hl=en&gl=US&ceid=US:en",
+  Bitcoin: [
 
-  "https://news.google.com/rss/search?q=Korea+illegal+workers&hl=en&gl=US&ceid=US:en"
+    "https://siamblockchain.com/feed",
 
-];
+    "https://news.google.com/rss/search?q=Bitcoin&hl=th&gl=TH&ceid=TH:th"
+
+  ],
+
+  NVIDIA: [
+
+    "https://news.google.com/rss/search?q=NVIDIA&hl=th&gl=TH&ceid=TH:th"
+
+  ],
+
+  TSMC: [
+
+    "https://news.google.com/rss/search?q=TSMC&hl=th&gl=TH&ceid=TH:th"
+
+  ],
+
+  Tesla: [
+
+    "https://news.google.com/rss/search?q=Tesla&hl=th&gl=TH&ceid=TH:th"
+
+  ],
+
+  Korea: [
+
+    "https://news.google.com/rss/search?q=เกาหลี&hl=th&gl=TH&ceid=TH:th"
+
+  ],
+
+  "Korea illegal workers": [
+
+    "https://news.google.com/rss/search?q=แรงงานเกาหลี&hl=th&gl=TH&ceid=TH:th",
+
+    "https://news.google.com/rss/search?q=Yangsan+immigration&hl=en&gl=US&ceid=US:en"
+
+  ]
+
+};
 
 // CLEAN URL
 function cleanGoogleUrl(url) {
@@ -113,7 +145,7 @@ async function translateText(
   }
 }
 
-// GEMINI AI
+// GEMINI
 async function askAI(prompt) {
 
   try {
@@ -137,7 +169,7 @@ async function askAI(prompt) {
 
 `ตอบเป็นภาษาไทยเสมอ
 
-คุณคือ AI Assistant ข่าว หุ้น Crypto AI และเกาหลี
+คุณคือ AI Assistant
 
 คำถาม:
 
@@ -195,8 +227,8 @@ function analyzeSentiment(title) {
     "lawsuit",
 
     "ร่วง",
-    "กวาดล้าง",
-    "จับ"
+    "จับ",
+    "กวาดล้าง"
 
   ];
 
@@ -234,14 +266,23 @@ function analyzeSentiment(title) {
   };
 }
 
-// FETCH NEWS
+// FETCH
 async function fetchFeeds() {
 
+  const cacheKey =
+    `news_${currentTopic}`;
+
   const cached =
-    cache.get("news");
+    cache.get(cacheKey);
 
   if (cached)
     return cached;
+
+  const feeds =
+
+    feedMap[currentTopic] ||
+
+    feedMap.general;
 
   let all = [];
 
@@ -294,6 +335,7 @@ async function fetchFeeds() {
     } catch {}
   }
 
+  // กันซ้ำ
   const unique = [];
 
   const seen =
@@ -316,7 +358,7 @@ async function fetchFeeds() {
     unique.slice(0, 20);
 
   cache.set(
-    "news",
+    cacheKey,
     all
   );
 
@@ -325,6 +367,23 @@ async function fetchFeeds() {
 
 // SEND TELEGRAM
 async function sendTelegram(news) {
+
+  if (!newsEnabled)
+    return;
+
+  // กันส่งซ้ำ
+  if (
+    sentNews.has(
+      news.title
+    )
+  ) {
+
+    return;
+  }
+
+  sentNews.add(
+    news.title
+  );
 
   latestNews = news;
 
@@ -466,6 +525,54 @@ async function checkTelegramCommands() {
         );
       }
 
+      // STOP
+      if (
+        text === "/stop"
+      ) {
+
+        newsEnabled = false;
+
+        await axios.post(
+
+          `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+
+          {
+
+            chat_id:
+              chatId,
+
+            text:
+              "🛑 ปิดส่งข่าวแล้ว"
+
+          }
+
+        );
+      }
+
+      // START
+      if (
+        text === "/startnews"
+      ) {
+
+        newsEnabled = true;
+
+        await axios.post(
+
+          `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+
+          {
+
+            chat_id:
+              chatId,
+
+            text:
+              "✅ เปิดส่งข่าวแล้ว"
+
+          }
+
+        );
+      }
+
       // ASK AI
       if (
         text.startsWith("/ask ")
@@ -515,7 +622,7 @@ async function checkTelegramCommands() {
               chatId,
 
             text:
-              "📡 เลือกเมนู",
+              "📡 เลือกหัวข้อข่าว",
 
             reply_markup: {
 
@@ -530,7 +637,7 @@ async function checkTelegramCommands() {
 
                   {
                     text: "📈 หุ้นโลก",
-                    callback_data: "Nasdaq"
+                    callback_data: "general"
                   }
 
                 ],
@@ -538,7 +645,7 @@ async function checkTelegramCommands() {
                 [
 
                   {
-                    text: "₿ Crypto",
+                    text: "₿ Bitcoin",
                     callback_data: "Bitcoin"
                   },
 
@@ -648,56 +755,13 @@ async function checkTelegramCommands() {
           update.callback_query
             .message.chat.id;
 
-        // translate
-        if (
-          data ===
-          "translate_latest"
-        ) {
+        // reset cache/topic
+        currentTopic =
+          data;
 
-          if (!latestNews)
-            continue;
+        cache.flushAll();
 
-          const translatedTitle =
-
-            await translateText(
-              latestNews.title,
-              "th"
-            );
-
-          const translatedSummary =
-
-            await translateText(
-              latestNews.summary,
-              "th"
-            );
-
-          await axios.post(
-
-            `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
-
-            {
-
-              chat_id:
-                chatId,
-
-              text:
-
-`📰 ${translatedTitle}
-
-📝 ${translatedSummary}
-
-🔗 ${latestNews.url}`
-
-            }
-
-          );
-
-          continue;
-        }
-
-        topics = [data];
-
-        cache.del("news");
+        sentNews.clear();
 
         await axios.post(
 
@@ -710,9 +774,11 @@ async function checkTelegramCommands() {
 
             text:
 
-`✅ เปลี่ยน Topic แล้ว
+`✅ เปลี่ยนหัวข้อแล้ว
 
-📡 ${data}`
+📡 ${data}
+
+♻️ รีเซ็ตข่าวเก่าแล้ว`
 
           }
 
@@ -770,14 +836,15 @@ setInterval(
 
     try {
 
-      cache.del("news");
+      if (!newsEnabled)
+        return;
 
       const news =
         await fetchFeeds();
 
       for (
         const item of
-        news.slice(0, 3)
+        news
       ) {
 
         await sendTelegram(
@@ -810,29 +877,11 @@ app.listen(
 
   PORT,
 
-  async () => {
+  () => {
 
     console.log(
       `Server running on ${PORT}`
     );
-
-    try {
-
-      const news =
-        await fetchFeeds();
-
-      for (
-        const item of
-        news.slice(0, 3)
-      ) {
-
-        await sendTelegram(
-          item
-        );
-
-      }
-
-    } catch {}
 
   }
 );
