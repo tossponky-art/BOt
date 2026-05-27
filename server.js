@@ -1,4 +1,3 @@
-
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -19,6 +18,7 @@ app.use(express.json());
 const PORT = process.env.PORT || 3000;
 
 const feeds = [
+
   // AI
   "https://www.reddit.com/r/artificial/hot.rss",
 
@@ -32,7 +32,7 @@ const feeds = [
   "https://news.google.com/rss/search?q=nvidia",
   "https://news.google.com/rss/search?q=tsmc",
 
-  // ข่าวเกาหลี
+  // ข่าวแรงงานเกาหลี
   "https://news.google.com/rss/search?q=Korea+illegal+workers",
   "https://news.google.com/rss/search?q=Yangsan+immigration",
   "https://news.google.com/rss/search?q=Yangsan+foreign+worker+raid",
@@ -40,24 +40,35 @@ const feeds = [
 
   // Tech/Crypto
   "https://feeds.feedburner.com/CoinDesk"
+
 ];
 
 async function translateText(text) {
+
   try {
-    const res = await fetch(
+
+    if (!text) return "ไม่มีข้อมูล";
+
+    const url =
       "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=th&dt=t&q=" +
-      encodeURIComponent(text)
-    );
+      encodeURIComponent(text);
 
-    const data = await res.json();
+    const res = await axios.get(url);
 
-    return data[0].map(x => x[0]).join("");
-  } catch {
+    return res.data[0]
+      .map(x => x[0])
+      .join("");
+
+  } catch (e) {
+
+    console.log("Translate Error:", e.message);
+
     return text;
   }
 }
 
 async function fetchFeeds() {
+
   const cached = cache.get("news");
 
   if (cached) return cached;
@@ -65,33 +76,44 @@ async function fetchFeeds() {
   let all = [];
 
   for (const url of feeds) {
+
     try {
+
       const feed = await parser.parseURL(url);
 
       const items = await Promise.all(
+
         feed.items.slice(0, 5).map(async (x, i) => ({
+
           id: `${Date.now()}-${i}`,
 
           title: await translateText(
             x.title || "ไม่มีหัวข้อข่าว"
           ),
 
-          source: feed.title,
+          source: feed.title || "Unknown Source",
 
           summary: await translateText(
-            x.contentSnippet || "ไม่มีรายละเอียด"
+            x.contentSnippet ||
+            x.content ||
+            x.title ||
+            "ไม่มีรายละเอียด"
           ),
 
           url: x.link,
 
           time: x.pubDate || new Date().toISOString()
+
         }))
+
       );
 
       all.push(...items);
 
     } catch (e) {
+
       console.log("Feed error:", url);
+
     }
   }
 
@@ -100,13 +122,17 @@ async function fetchFeeds() {
   const seen = new Set();
 
   for (const item of all) {
+
     if (!seen.has(item.title)) {
+
       seen.add(item.title);
+
       unique.push(item);
+
     }
   }
 
-  // จำกัดจำนวน
+  // จำกัดข่าว
   all = unique.slice(0, 20);
 
   cache.set("news", all);
@@ -146,16 +172,21 @@ function analyzeSentiment(title) {
   let score = 0;
 
   bullishWords.forEach(w => {
+
     if (lower.includes(w)) score += 20;
+
   });
 
   bearishWords.forEach(w => {
+
     if (lower.includes(w)) score -= 20;
+
   });
 
   let sentiment = "NEUTRAL";
 
   if (score > 0) sentiment = "BULLISH";
+
   if (score < 0) sentiment = "BEARISH";
 
   return {
