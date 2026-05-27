@@ -21,6 +21,9 @@ app.use(express.json());
 const PORT =
   process.env.PORT || 3000;
 
+// ข่าวล่าสุด
+let latestNews = null;
+
 // TOPICS
 let topics = [
   "AI",
@@ -78,7 +81,7 @@ function buildFeeds() {
   );
 }
 
-// TRANSLATE
+// GOOGLE TRANSLATE
 async function translateText(
   text,
   target = "th"
@@ -86,37 +89,23 @@ async function translateText(
 
   try {
 
-    if (!text)
-      return "ไม่มีข้อมูล";
-
     const url =
 
-      "https://api.mymemory.translated.net/get?q=" +
-
-      encodeURIComponent(text) +
-
-      `&langpair=auto|${target}`;
+      `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${target}&dt=t&q=${encodeURIComponent(text)}`;
 
     const res =
       await axios.get(url);
 
-    const translated =
+    return res.data[0]
+      .map(x => x[0])
+      .join("");
 
-      res.data?.responseData
-        ?.translatedText;
+  } catch (e) {
 
-    if (
-      translated &&
-      translated !== text
-    ) {
-
-      return translated;
-
-    }
-
-    return text;
-
-  } catch {
+    console.log(
+      "Translate Error:",
+      e.message
+    );
 
     return text;
   }
@@ -224,13 +213,31 @@ async function fetchFeeds() {
                 title:
 
                   await translateText(
-                    x.title
+                    x.title,
+                    "th"
                   ),
+
+                originalTitle:
+                  x.title,
 
                 source:
                   feed.title,
 
                 summary:
+
+                  await translateText(
+
+                    x.contentSnippet ||
+
+                    x.title ||
+
+                    "ไม่มีรายละเอียด",
+
+                    "th"
+
+                  ),
+
+                originalSummary:
 
                   x.contentSnippet ||
 
@@ -254,10 +261,17 @@ async function fetchFeeds() {
 
       all.push(...items);
 
-    } catch {}
+    } catch (e) {
+
+      console.log(
+        "Feed Error:",
+        e.message
+      );
+
+    }
   }
 
-  // กันซ้ำ
+  // กันข่าวซ้ำ
   const unique = [];
 
   const seen =
@@ -289,6 +303,8 @@ async function fetchFeeds() {
 
 // SEND TELEGRAM
 async function sendTelegram(news) {
+
+  latestNews = news;
 
   const analysis =
     analyzeSentiment(
@@ -416,31 +432,6 @@ async function checkTelegramCommands() {
         );
       }
 
-      // TOPICS
-      if (
-        text === "/topics"
-      ) {
-
-        await axios.post(
-
-          `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
-
-          {
-
-            chat_id:
-              chatId,
-
-            text:
-
-`📡 Topics ปัจจุบัน
-
-${topics.join("\n")}`
-
-          }
-
-        );
-      }
-
       // MENU
       if (
         text === "/menu"
@@ -502,20 +493,6 @@ ${topics.join("\n")}`
                     callback_data:
                       "Korea illegal workers"
                   }
-                ],
-
-                [
-                  {
-                    text: "🏭 Samsung",
-                    callback_data:
-                      "Samsung"
-                  },
-
-                  {
-                    text: "🚘 Tesla",
-                    callback_data:
-                      "Tesla"
-                  }
                 ]
 
               ]
@@ -527,7 +504,32 @@ ${topics.join("\n")}`
         );
       }
 
-      // /topic
+      // TOPICS
+      if (
+        text === "/topics"
+      ) {
+
+        await axios.post(
+
+          `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+
+          {
+
+            chat_id:
+              chatId,
+
+            text:
+
+`📡 Topics ปัจจุบัน
+
+${topics.join("\n")}`
+
+          }
+
+        );
+      }
+
+      // TOPIC
       if (
         text.startsWith("/topic ")
       ) {
@@ -578,17 +580,20 @@ ${topics.join("\n")}`
         );
       }
 
-      // /th
+      // แปลไทย
       if (
-        text.startsWith("/th ")
+
+        text.startsWith("/th ") ||
+
+        text.startsWith("แปลไทย ")
+
       ) {
 
         const raw =
 
-          text.replace(
-            "/th ",
-            ""
-          );
+          text
+            .replace("/th ", "")
+            .replace("แปลไทย ", "");
 
         const translated =
 
@@ -614,17 +619,20 @@ ${topics.join("\n")}`
         );
       }
 
-      // /en
+      // แปลอังกฤษ
       if (
-        text.startsWith("/en ")
+
+        text.startsWith("/en ") ||
+
+        text.startsWith("แปลอังกฤษ ")
+
       ) {
 
         const raw =
 
-          text.replace(
-            "/en ",
-            ""
-          );
+          text
+            .replace("/en ", "")
+            .replace("แปลอังกฤษ ", "");
 
         const translated =
 
@@ -644,6 +652,36 @@ ${topics.join("\n")}`
 
             text:
               translated
+
+          }
+
+        );
+      }
+
+      // แปลข่าวล่าสุด
+      if (
+        text === "แปลไทย"
+      ) {
+
+        if (!latestNews)
+          continue;
+
+        await axios.post(
+
+          `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+
+          {
+
+            chat_id:
+              chatId,
+
+            text:
+
+`📰 ${latestNews.title}
+
+📝 ${latestNews.summary}
+
+🔗 ${latestNews.url}`
 
           }
 
