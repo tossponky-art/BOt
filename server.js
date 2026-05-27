@@ -145,21 +145,23 @@ async function translateText(
   }
 }
 
-// GEMINI
+// GEMINI AI
 async function askAI(prompt) {
 
   try {
 
-    const res =
+    const response =
       await axios.post(
 
-`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
 
         {
 
           contents: [
 
             {
+
+              role: "user",
 
               parts: [
 
@@ -169,9 +171,15 @@ async function askAI(prompt) {
 
 `ตอบเป็นภาษาไทยเสมอ
 
-คุณคือ AI Assistant
+คุณคือ AI Assistant เรื่อง:
+- หุ้นโลก
+- AI
+- Crypto
+- ข่าวเกาหลี
+- ข่าวแรงงาน
+- เทคโนโลยี
 
-คำถาม:
+ช่วยตอบคำถามนี้:
 
 ${prompt}`
 
@@ -183,22 +191,51 @@ ${prompt}`
 
           ]
 
+        },
+
+        {
+
+          headers: {
+
+            "Content-Type":
+              "application/json"
+
+          }
+
         }
 
       );
 
-    return res.data
-      .candidates?.[0]
-      ?.content?.parts?.[0]
-      ?.text ||
+    const text =
 
-      "❌ AI Error";
+      response.data
+        ?.candidates?.[0]
+        ?.content?.parts?.[0]
+        ?.text;
+
+    if (!text) {
+
+      return "❌ AI ไม่ตอบกลับ";
+
+    }
+
+    return text;
 
   } catch (e) {
 
+    console.log(
+      "Gemini Error:",
+      e.response?.data || e.message
+    );
+
     return `❌ AI Error
 
-${e.message}`;
+${JSON.stringify(
+  e.response?.data || e.message,
+  null,
+  2
+)}`;
+
   }
 }
 
@@ -371,7 +408,7 @@ async function sendTelegram(news) {
   if (!newsEnabled)
     return;
 
-  // กันส่งซ้ำ
+  // กันข่าวซ้ำ
   if (
     sentNews.has(
       news.title
@@ -755,7 +792,53 @@ async function checkTelegramCommands() {
           update.callback_query
             .message.chat.id;
 
-        // reset cache/topic
+        // translate
+        if (
+          data ===
+          "translate_latest"
+        ) {
+
+          if (!latestNews)
+            continue;
+
+          const translatedTitle =
+
+            await translateText(
+              latestNews.title,
+              "th"
+            );
+
+          const translatedSummary =
+
+            await translateText(
+              latestNews.summary,
+              "th"
+            );
+
+          await axios.post(
+
+            `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+
+            {
+
+              chat_id:
+                chatId,
+
+              text:
+
+`📰 ${translatedTitle}
+
+📝 ${translatedSummary}
+
+🔗 ${latestNews.url}`
+
+            }
+
+          );
+
+          continue;
+        }
+
         currentTopic =
           data;
 
