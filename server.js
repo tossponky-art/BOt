@@ -526,6 +526,44 @@ async function checkTelegramCommands() {
             ""
           );
 
+        // ไทย → อังกฤษ
+        const topicMap = {
+
+          "หุ้น":
+            "stock market",
+
+          "คริปโต":
+            "crypto",
+
+          "บิตคอยน์":
+            "bitcoin",
+
+          "เอไอ":
+            "AI",
+
+          "ข่าวเกาหลี":
+            "Korea news",
+
+          "แรงงานเกาหลี":
+            "Korea illegal workers",
+
+          "หยางซาน":
+            "Yangsan immigration",
+
+          "ซัมซุง":
+            "Samsung",
+
+          "เทสลา":
+            "Tesla",
+
+          "เอ็นวิเดีย":
+            "nvidia",
+
+          "ทีเอสเอ็มซี":
+            "tsmc"
+
+        };
+
         topics =
 
           raw
@@ -533,7 +571,15 @@ async function checkTelegramCommands() {
 
             .map(
               x => x.trim()
-            );
+            )
+
+            .map(t => {
+
+              return (
+                topicMap[t] || t
+              );
+
+            });
 
         cache.del("news");
 
