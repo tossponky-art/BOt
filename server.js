@@ -21,67 +21,74 @@ app.use(express.json());
 const PORT =
   process.env.PORT || 3000;
 
-// ข่าวล่าสุด
 let latestNews = null;
 
 // TOPICS
 let topics = [
   "AI",
-  "crypto",
-  "nvidia"
+  "NVIDIA",
+  "TSMC",
+  "Tesla",
+  "Nasdaq",
+  "Bitcoin",
+  "Korea illegal workers"
 ];
 
-// TOPIC MAP
-const topicMap = {
+// FEEDS
+const feeds = [
 
-  "หุ้น":
-    "stock market",
+  // AI ไทย
+  "https://www.beartai.com/feed",
 
-  "คริปโต":
-    "crypto",
+  // Crypto
+  "https://siamblockchain.com/feed",
 
-  "บิตคอยน์":
-    "bitcoin",
+  // หุ้นโลก
+  "https://news.google.com/rss/search?q=Nasdaq&hl=th&gl=TH&ceid=TH:th",
 
-  "เอไอ":
-    "AI",
+  "https://news.google.com/rss/search?q=NVIDIA&hl=th&gl=TH&ceid=TH:th",
 
-  "ข่าวเกาหลี":
-    "Korea news",
+  "https://news.google.com/rss/search?q=TSMC&hl=th&gl=TH&ceid=TH:th",
 
-  "แรงงานเกาหลี":
-    "Korea illegal workers",
+  "https://news.google.com/rss/search?q=Tesla&hl=th&gl=TH&ceid=TH:th",
 
-  "หยางซาน":
-    "Yangsan immigration",
+  "https://news.google.com/rss/search?q=Bitcoin&hl=th&gl=TH&ceid=TH:th",
 
-  "ซัมซุง":
-    "Samsung",
+  // เกาหลี
+  "https://news.google.com/rss/search?q=แรงงานเกาหลี&hl=th&gl=TH&ceid=TH:th",
 
-  "เทสลา":
-    "Tesla",
+  "https://news.google.com/rss/search?q=Yangsan+immigration&hl=en&gl=US&ceid=US:en",
 
-  "เอ็นวิเดีย":
-    "nvidia",
+  "https://news.google.com/rss/search?q=Korea+illegal+workers&hl=en&gl=US&ceid=US:en"
 
-  "ทีเอสเอ็มซี":
-    "tsmc"
+];
 
-};
+// CLEAN URL
+function cleanGoogleUrl(url) {
 
-// BUILD FEEDS
-function buildFeeds() {
+  try {
 
-  return topics.map(
+    const match = url.match(
+      /url=(.*?)&/
+    );
 
-    t =>
+    if (match?.[1]) {
 
-      `https://news.google.com/rss/search?q=${encodeURIComponent(t)}`
+      return decodeURIComponent(
+        match[1]
+      );
 
-  );
+    }
+
+    return url;
+
+  } catch {
+
+    return url;
+  }
 }
 
-// GOOGLE TRANSLATE
+// TRANSLATE
 async function translateText(
   text,
   target = "th"
@@ -100,14 +107,80 @@ async function translateText(
       .map(x => x[0])
       .join("");
 
-  } catch (e) {
-
-    console.log(
-      "Translate Error:",
-      e.message
-    );
+  } catch {
 
     return text;
+  }
+}
+
+// GPT CHAT
+async function askGPT(prompt) {
+
+  try {
+
+    const res =
+      await axios.post(
+
+        "https://api.openai.com/v1/chat/completions",
+
+        {
+
+          model: "gpt-4o-mini",
+
+          messages: [
+
+            {
+              role: "system",
+
+              content:
+
+`คุณคือ AI Assistant ภาษาไทย
+
+ตอบเป็นภาษาไทยเสมอ
+
+สามารถคุย:
+- หุ้นโลก
+- AI
+- Crypto
+- เกาหลี
+- ข่าวแรงงาน
+- ข่าวโลก
+- เทคโนโลยี
+
+ตอบให้เข้าใจง่าย กระชับ`
+
+            },
+
+            {
+              role: "user",
+              content: prompt
+            }
+
+          ]
+
+        },
+
+        {
+
+          headers: {
+
+            Authorization:
+
+`Bearer ${process.env.OPENAI_API_KEY}`
+
+          }
+
+        }
+
+      );
+
+    return res.data
+      .choices[0]
+      .message.content;
+
+  } catch (e) {
+
+    return "❌ GPT Error";
   }
 }
 
@@ -184,9 +257,6 @@ async function fetchFeeds() {
   if (cached)
     return cached;
 
-  const feeds =
-    buildFeeds();
-
   let all = [];
 
   for (const url of feeds) {
@@ -199,79 +269,45 @@ async function fetchFeeds() {
         );
 
       const items =
-        await Promise.all(
+        feed.items
+          .slice(0, 5)
 
-          feed.items
-            .slice(0, 5)
+          .map((x, i) => ({
 
-            .map(
-              async (x, i) => ({
+            id:
+              `${Date.now()}-${i}`,
 
-                id:
-                  `${Date.now()}-${i}`,
+            title:
+              x.title,
 
-                title:
+            source:
+              feed.title,
 
-                  await translateText(
-                    x.title,
-                    "th"
-                  ),
+            summary:
 
-                originalTitle:
-                  x.title,
+              x.contentSnippet ||
 
-                source:
-                  feed.title,
+              "ไม่มีรายละเอียด",
 
-                summary:
+            url:
+              cleanGoogleUrl(
+                x.link
+              ),
 
-                  await translateText(
+            time:
 
-                    x.contentSnippet ||
+              x.pubDate ||
 
-                    x.title ||
+              new Date()
+                .toISOString()
 
-                    "ไม่มีรายละเอียด",
-
-                    "th"
-
-                  ),
-
-                originalSummary:
-
-                  x.contentSnippet ||
-
-                  x.title ||
-
-                  "ไม่มีรายละเอียด",
-
-                url:
-                  x.link,
-
-                time:
-
-                  x.pubDate ||
-
-                  new Date()
-                    .toISOString()
-
-              })
-            )
-        );
+          }));
 
       all.push(...items);
 
-    } catch (e) {
-
-      console.log(
-        "Feed Error:",
-        e.message
-      );
-
-    }
+    } catch {}
   }
 
-  // กันข่าวซ้ำ
   const unique = [];
 
   const seen =
@@ -347,38 +383,50 @@ ${news.url}
 
 `;
 
-  try {
+  await axios.post(
 
-    await axios.post(
+    `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
 
-      `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+    {
 
-      {
+      chat_id:
+        process.env
+          .TELEGRAM_CHAT_ID,
 
-        chat_id:
-          process.env
-            .TELEGRAM_CHAT_ID,
+      text:
+        message,
 
-        text:
-          message,
+      parse_mode:
+        "HTML",
 
-        parse_mode:
-          "HTML"
+      reply_markup: {
+
+        inline_keyboard: [
+
+          [
+
+            {
+
+              text:
+                "🌐 แปลไทย",
+
+              callback_data:
+                "translate_latest"
+
+            }
+
+          ]
+
+        ]
 
       }
 
-    );
+    }
 
-  } catch (e) {
-
-    console.log(
-      e.message
-    );
-
-  }
+  );
 }
 
-// TELEGRAM COMMANDS
+// TELEGRAM
 let lastUpdateId = 0;
 
 async function checkTelegramCommands() {
@@ -447,52 +495,67 @@ async function checkTelegramCommands() {
               chatId,
 
             text:
-              "📡 เลือกหัวข้อข่าว",
+              "📡 เลือกเมนู",
 
             reply_markup: {
 
               inline_keyboard: [
 
                 [
+
                   {
                     text: "🤖 AI",
                     callback_data: "AI"
                   },
 
                   {
-                    text: "📈 หุ้น",
-                    callback_data:
-                      "stock market"
+                    text: "📈 หุ้นโลก",
+                    callback_data: "Nasdaq"
                   }
+
                 ],
 
                 [
+
                   {
                     text: "₿ Crypto",
-                    callback_data:
-                      "crypto"
+                    callback_data: "Bitcoin"
                   },
 
                   {
                     text: "🟢 NVIDIA",
-                    callback_data:
-                      "nvidia"
+                    callback_data: "NVIDIA"
                   }
+
                 ],
 
                 [
+
                   {
-                    text: "🇰🇷 เกาหลี",
-                    callback_data:
-                      "Korea news"
+                    text: "⚙️ TSMC",
+                    callback_data: "TSMC"
                   },
 
                   {
-                    text:
-                      "👮 แรงงาน",
+                    text: "🚘 Tesla",
+                    callback_data: "Tesla"
+                  }
+
+                ],
+
+                [
+
+                  {
+                    text: "🇰🇷 เกาหลี",
+                    callback_data: "Korea"
+                  },
+
+                  {
+                    text: "👮 แรงงาน",
                     callback_data:
                       "Korea illegal workers"
                   }
+
                 ]
 
               ]
@@ -504,61 +567,22 @@ async function checkTelegramCommands() {
         );
       }
 
-      // TOPICS
+      // CHAT GPT MODE
       if (
-        text === "/topics"
+        text.startsWith("/ask ")
       ) {
 
-        await axios.post(
-
-          `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
-
-          {
-
-            chat_id:
-              chatId,
-
-            text:
-
-`📡 Topics ปัจจุบัน
-
-${topics.join("\n")}`
-
-          }
-
-        );
-      }
-
-      // TOPIC
-      if (
-        text.startsWith("/topic ")
-      ) {
-
-        const raw =
+        const prompt =
 
           text.replace(
-            "/topic ",
+            "/ask ",
             ""
           );
 
-        topics =
-
-          raw
-            .split(",")
-
-            .map(
-              x => x.trim()
-            )
-
-            .map(t => {
-
-              return (
-                topicMap[t] || t
-              );
-
-            });
-
-        cache.del("news");
+        const answer =
+          await askGPT(
+            prompt
+          );
 
         await axios.post(
 
@@ -570,10 +594,7 @@ ${topics.join("\n")}`
               chatId,
 
             text:
-
-`✅ เปลี่ยน Topics แล้ว
-
-${topics.join("\n")}`
+              answer
 
           }
 
@@ -582,23 +603,23 @@ ${topics.join("\n")}`
 
       // แปลไทย
       if (
-
-        text.startsWith("/th ") ||
-
-        text.startsWith("แปลไทย ")
-
+        text === "แปลไทย"
       ) {
 
-        const raw =
+        if (!latestNews)
+          continue;
 
-          text
-            .replace("/th ", "")
-            .replace("แปลไทย ", "");
-
-        const translated =
+        const translatedTitle =
 
           await translateText(
-            raw,
+            latestNews.title,
+            "th"
+          );
+
+        const translatedSummary =
+
+          await translateText(
+            latestNews.summary,
             "th"
           );
 
@@ -612,74 +633,10 @@ ${topics.join("\n")}`
               chatId,
 
             text:
-              translated
 
-          }
+`📰 ${translatedTitle}
 
-        );
-      }
-
-      // แปลอังกฤษ
-      if (
-
-        text.startsWith("/en ") ||
-
-        text.startsWith("แปลอังกฤษ ")
-
-      ) {
-
-        const raw =
-
-          text
-            .replace("/en ", "")
-            .replace("แปลอังกฤษ ", "");
-
-        const translated =
-
-          await translateText(
-            raw,
-            "en"
-          );
-
-        await axios.post(
-
-          `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
-
-          {
-
-            chat_id:
-              chatId,
-
-            text:
-              translated
-
-          }
-
-        );
-      }
-
-      // แปลข่าวล่าสุด
-      if (
-        text === "แปลไทย"
-      ) {
-
-        if (!latestNews)
-          continue;
-
-        await axios.post(
-
-          `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
-
-          {
-
-            chat_id:
-              chatId,
-
-            text:
-
-`📰 ${latestNews.title}
-
-📝 ${latestNews.summary}
+📝 ${translatedSummary}
 
 🔗 ${latestNews.url}`
 
@@ -689,7 +646,7 @@ ${topics.join("\n")}`
       }
     }
 
-    // BUTTON CALLBACKS
+    // BUTTONS
     for (const update of updates) {
 
       if (
@@ -704,6 +661,53 @@ ${topics.join("\n")}`
 
           update.callback_query
             .message.chat.id;
+
+        // translate latest
+        if (
+          data ===
+          "translate_latest"
+        ) {
+
+          if (!latestNews)
+            continue;
+
+          const translatedTitle =
+
+            await translateText(
+              latestNews.title,
+              "th"
+            );
+
+          const translatedSummary =
+
+            await translateText(
+              latestNews.summary,
+              "th"
+            );
+
+          await axios.post(
+
+            `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+
+            {
+
+              chat_id:
+                chatId,
+
+              text:
+
+`📰 ${translatedTitle}
+
+📝 ${translatedSummary}
+
+🔗 ${latestNews.url}`
+
+            }
+
+          );
+
+          continue;
+        }
 
         topics = [data];
 
@@ -803,7 +807,7 @@ setInterval(
   300000
 );
 
-// REALTIME COMMANDS
+// REALTIME
 setInterval(
 
   async () => {
