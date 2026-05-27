@@ -21,16 +21,13 @@ app.use(express.json());
 const PORT =
   process.env.PORT || 3000;
 
-// เปิด/ปิดข่าว
 let newsEnabled = true;
 
-// จำข่าวที่ส่งแล้ว
 const sentNews =
   new Set();
 
 let latestNews = null;
 
-// topic ปัจจุบัน
 let currentTopic =
   "general";
 
@@ -100,9 +97,10 @@ function cleanGoogleUrl(url) {
 
   try {
 
-    const match = url.match(
-      /url=(.*?)&/
-    );
+    const match =
+      url.match(
+        /url=(.*?)&/
+      );
 
     if (match?.[1]) {
 
@@ -130,7 +128,7 @@ async function translateText(
 
     const url =
 
-      `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${target}&dt=t&q=${encodeURIComponent(text)}`;
+`https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${target}&dt=t&q=${encodeURIComponent(text)}`;
 
     const res =
       await axios.get(url);
@@ -153,7 +151,7 @@ async function askAI(prompt) {
     const response =
       await axios.post(
 
-`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
 
         {
 
@@ -171,15 +169,11 @@ async function askAI(prompt) {
 
 `ตอบเป็นภาษาไทยเสมอ
 
-คุณคือ AI Assistant เรื่อง:
-- หุ้นโลก
-- AI
-- Crypto
-- ข่าวเกาหลี
-- ข่าวแรงงาน
-- เทคโนโลยี
+คุณคือ AI Assistant
 
-ช่วยตอบคำถามนี้:
+ตอบสั้น กระชับ เข้าใจง่าย
+
+คำถาม:
 
 ${prompt}`
 
@@ -206,20 +200,16 @@ ${prompt}`
 
       );
 
-    const text =
+    return (
 
       response.data
         ?.candidates?.[0]
         ?.content?.parts?.[0]
-        ?.text;
+        ?.text ||
 
-    if (!text) {
+      "❌ AI ไม่ตอบ"
 
-      return "❌ AI ไม่ตอบกลับ";
-
-    }
-
-    return text;
+    );
 
   } catch (e) {
 
@@ -228,14 +218,7 @@ ${prompt}`
       e.response?.data || e.message
     );
 
-    return `❌ AI Error
-
-${JSON.stringify(
-  e.response?.data || e.message,
-  null,
-  2
-)}`;
-
+    return "❌ AI ใช้งานไม่ได้ชั่วคราว";
   }
 }
 
@@ -248,11 +231,9 @@ function analyzeSentiment(title) {
     "rise",
     "growth",
     "profit",
-    "record",
 
     "พุ่ง",
-    "กำไร",
-    "โต"
+    "กำไร"
 
   ];
 
@@ -260,12 +241,9 @@ function analyzeSentiment(title) {
 
     "crash",
     "drop",
-    "fear",
-    "lawsuit",
 
     "ร่วง",
-    "จับ",
-    "กวาดล้าง"
+    "จับ"
 
   ];
 
@@ -303,7 +281,7 @@ function analyzeSentiment(title) {
   };
 }
 
-// FETCH
+// FETCH NEWS
 async function fetchFeeds() {
 
   const cacheKey =
@@ -369,10 +347,17 @@ async function fetchFeeds() {
 
       all.push(...items);
 
-    } catch {}
+    } catch (e) {
+
+      console.log(
+        "Feed Error:",
+        e.message
+      );
+
+    }
   }
 
-  // กันซ้ำ
+  // unique
   const unique = [];
 
   const seen =
@@ -405,45 +390,46 @@ async function fetchFeeds() {
 // SEND TELEGRAM
 async function sendTelegram(news) {
 
-  if (!newsEnabled)
-    return;
+  try {
 
-  // กันข่าวซ้ำ
-  if (
-    sentNews.has(
-      news.title
-    )
-  ) {
+    if (!newsEnabled)
+      return;
 
-    return;
-  }
+    if (
+      sentNews.has(
+        news.title
+      )
+    ) {
 
-  sentNews.add(
-    news.title
-  );
+      return;
+    }
 
-  latestNews = news;
-
-  const analysis =
-    analyzeSentiment(
+    sentNews.add(
       news.title
     );
 
-  const emoji =
+    latestNews = news;
 
-    analysis.sentiment ===
-    "BULLISH"
+    const analysis =
+      analyzeSentiment(
+        news.title
+      );
 
-      ? "🟢"
+    const emoji =
 
-      : analysis.sentiment ===
-        "BEARISH"
+      analysis.sentiment ===
+      "BULLISH"
 
-      ? "🔴"
+        ? "🟢"
 
-      : "🟡";
+        : analysis.sentiment ===
+          "BEARISH"
 
-  const message = `
+        ? "🔴"
+
+        : "🟡";
+
+    const message = `
 
 📰 <b>${news.title}</b>
 
@@ -465,50 +451,37 @@ ${news.url}
 
 `;
 
-  await axios.post(
+    await axios.post(
 
-    `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
 
-    {
+      {
 
-      chat_id:
-        process.env
-          .TELEGRAM_CHAT_ID,
+        chat_id:
+          process.env
+            .TELEGRAM_CHAT_ID,
 
-      text:
-        message,
+        text:
+          message,
 
-      parse_mode:
-        "HTML",
-
-      reply_markup: {
-
-        inline_keyboard: [
-
-          [
-
-            {
-
-              text:
-                "🌐 แปลไทย",
-
-              callback_data:
-                "translate_latest"
-
-            }
-
-          ]
-
-        ]
+        parse_mode:
+          "HTML"
 
       }
 
-    }
+    );
 
-  );
+  } catch (e) {
+
+    console.log(
+      "Telegram Error:",
+      e.message
+    );
+
+  }
 }
 
-// TELEGRAM
+// TELEGRAM COMMANDS
 let lastUpdateId = 0;
 
 async function checkTelegramCommands() {
@@ -519,7 +492,7 @@ async function checkTelegramCommands() {
 
       await axios.get(
 
-        `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/getUpdates?offset=${lastUpdateId + 1}`
+`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/getUpdates?offset=${lastUpdateId + 1}`
 
       );
 
@@ -547,7 +520,7 @@ async function checkTelegramCommands() {
 
         await axios.post(
 
-          `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
 
           {
 
@@ -571,7 +544,7 @@ async function checkTelegramCommands() {
 
         await axios.post(
 
-          `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
 
           {
 
@@ -579,7 +552,7 @@ async function checkTelegramCommands() {
               chatId,
 
             text:
-              "🛑 ปิดส่งข่าวแล้ว"
+              "🛑 ปิดข่าวแล้ว"
 
           }
 
@@ -595,7 +568,7 @@ async function checkTelegramCommands() {
 
         await axios.post(
 
-          `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
 
           {
 
@@ -603,7 +576,7 @@ async function checkTelegramCommands() {
               chatId,
 
             text:
-              "✅ เปิดส่งข่าวแล้ว"
+              "✅ เปิดข่าวแล้ว"
 
           }
 
@@ -629,7 +602,7 @@ async function checkTelegramCommands() {
 
         await axios.post(
 
-          `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
 
           {
 
@@ -651,7 +624,7 @@ async function checkTelegramCommands() {
 
         await axios.post(
 
-          `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
 
           {
 
@@ -659,7 +632,7 @@ async function checkTelegramCommands() {
               chatId,
 
             text:
-              "📡 เลือกหัวข้อข่าว",
+              "📡 เลือกข่าว",
 
             reply_markup: {
 
@@ -673,7 +646,7 @@ async function checkTelegramCommands() {
                   },
 
                   {
-                    text: "📈 หุ้นโลก",
+                    text: "📈 หุ้น",
                     callback_data: "general"
                   }
 
@@ -742,20 +715,18 @@ async function checkTelegramCommands() {
         const translatedTitle =
 
           await translateText(
-            latestNews.title,
-            "th"
+            latestNews.title
           );
 
         const translatedSummary =
 
           await translateText(
-            latestNews.summary,
-            "th"
+            latestNews.summary
           );
 
         await axios.post(
 
-          `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
 
           {
 
@@ -769,99 +740,6 @@ async function checkTelegramCommands() {
 📝 ${translatedSummary}
 
 🔗 ${latestNews.url}`
-
-          }
-
-        );
-      }
-    }
-
-    // BUTTONS
-    for (const update of updates) {
-
-      if (
-        update.callback_query
-      ) {
-
-        const data =
-          update.callback_query
-            .data;
-
-        const chatId =
-
-          update.callback_query
-            .message.chat.id;
-
-        // translate
-        if (
-          data ===
-          "translate_latest"
-        ) {
-
-          if (!latestNews)
-            continue;
-
-          const translatedTitle =
-
-            await translateText(
-              latestNews.title,
-              "th"
-            );
-
-          const translatedSummary =
-
-            await translateText(
-              latestNews.summary,
-              "th"
-            );
-
-          await axios.post(
-
-            `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
-
-            {
-
-              chat_id:
-                chatId,
-
-              text:
-
-`📰 ${translatedTitle}
-
-📝 ${translatedSummary}
-
-🔗 ${latestNews.url}`
-
-            }
-
-          );
-
-          continue;
-        }
-
-        currentTopic =
-          data;
-
-        cache.flushAll();
-
-        sentNews.clear();
-
-        await axios.post(
-
-          `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
-
-          {
-
-            chat_id:
-              chatId,
-
-            text:
-
-`✅ เปลี่ยนหัวข้อแล้ว
-
-📡 ${data}
-
-♻️ รีเซ็ตข่าวเก่าแล้ว`
 
           }
 
@@ -872,6 +750,7 @@ async function checkTelegramCommands() {
   } catch (e) {
 
     console.log(
+      "Command Error:",
       e.message
     );
 
@@ -936,14 +815,20 @@ setInterval(
 
       }
 
-    } catch {}
+    } catch (e) {
 
+      console.log(
+        "Auto News Error:",
+        e.message
+      );
+
+    }
   },
 
   300000
 );
 
-// REALTIME
+// COMMAND LOOP
 setInterval(
 
   async () => {
