@@ -23,23 +23,23 @@ app.use(express.json());
 const PORT =
   process.env.PORT || 3000;
 
-// ======================
+// =====================================
 // SETTINGS
-// ======================
+// =====================================
 
 let newsEnabled = true;
 
 let latestNews = null;
 
-const sentNews =
-  new Set();
-
 let currentTopic =
   "general";
 
-// ======================
+const sentNews =
+  new Set();
+
+// =====================================
 // FEEDS
-// ======================
+// =====================================
 
 const feedMap = {
 
@@ -111,9 +111,9 @@ const feedMap = {
 
 };
 
-// ======================
+// =====================================
 // CLEAN GOOGLE URL
-// ======================
+// =====================================
 
 function cleanGoogleUrl(url) {
 
@@ -155,9 +155,9 @@ function cleanGoogleUrl(url) {
   }
 }
 
-// ======================
+// =====================================
 // TRANSLATE
-// ======================
+// =====================================
 
 async function translateText(
   text,
@@ -191,9 +191,9 @@ async function translateText(
   }
 }
 
-// ======================
+// =====================================
 // GROQ AI
-// ======================
+// =====================================
 
 async function askAI(prompt) {
 
@@ -280,9 +280,9 @@ async function askAI(prompt) {
   }
 }
 
-// ======================
+// =====================================
 // SENTIMENT
-// ======================
+// =====================================
 
 function analyzeSentiment(title) {
 
@@ -342,9 +342,9 @@ function analyzeSentiment(title) {
   };
 }
 
-// ======================
+// =====================================
 // FETCH NEWS
-// ======================
+// =====================================
 
 async function fetchFeeds() {
 
@@ -433,7 +433,7 @@ async function fetchFeeds() {
     }
   }
 
-  // กันข่าวซ้ำ
+  // UNIQUE
   const unique = [];
 
   const seen =
@@ -467,9 +467,9 @@ async function fetchFeeds() {
   return all;
 }
 
-// ======================
+// =====================================
 // SEND TELEGRAM
-// ======================
+// =====================================
 
 async function sendTelegram(news) {
 
@@ -493,7 +493,7 @@ async function sendTelegram(news) {
 
     latestNews = news;
 
-    // แปลไทยอัตโนมัติ
+    // AUTO TRANSLATE
     const thaiTitle =
       await translateText(
         news.title
@@ -559,7 +559,29 @@ ${news.url}
           message,
 
         parse_mode:
-          "HTML"
+          "HTML",
+
+        reply_markup: {
+
+          inline_keyboard: [
+
+            [
+
+              {
+
+                text:
+                  "🌐 แปลไทย",
+
+                callback_data:
+                  "translate_latest"
+
+              }
+
+            ]
+
+          ]
+
+        }
 
       }
 
@@ -580,9 +602,9 @@ ${news.url}
   }
 }
 
-// ======================
+// =====================================
 // TELEGRAM COMMANDS
-// ======================
+// =====================================
 
 let lastUpdateId = 0;
 
@@ -606,6 +628,125 @@ async function checkTelegramCommands() {
       lastUpdateId =
         update.update_id;
 
+      // =====================================
+      // CALLBACK BUTTONS
+      // =====================================
+
+      if (
+        update.callback_query
+      ) {
+
+        const data =
+          update.callback_query
+            .data;
+
+        const chatId =
+
+          update.callback_query
+            .message.chat.id;
+
+        // =====================================
+        // TRANSLATE BUTTON
+        // =====================================
+
+        if (
+          data ===
+          "translate_latest"
+        ) {
+
+          if (!latestNews)
+            continue;
+
+          const translatedTitle =
+
+            await translateText(
+              latestNews.title
+            );
+
+          const translatedSummary =
+
+            await translateText(
+              latestNews.summary
+            );
+
+          await axios.post(
+
+`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+
+            {
+
+              chat_id:
+                chatId,
+
+              text:
+
+`🌐 แปลไทย
+
+📰 ${translatedTitle}
+
+📝 ${translatedSummary}
+
+🔗 ${latestNews.url}`
+
+            }
+
+          );
+
+          continue;
+        }
+
+        // =====================================
+        // CHANGE TOPIC
+        // =====================================
+
+        currentTopic =
+          data;
+
+        sentNews.clear();
+
+        cache.flushAll();
+
+        await axios.post(
+
+`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+
+          {
+
+            chat_id:
+              chatId,
+
+            text:
+
+`✅ เปลี่ยนหัวข้อแล้ว
+
+📡 ${data}`
+
+          }
+
+        );
+
+        // SEND NEW NEWS
+        const news =
+          await fetchFeeds();
+
+        for (
+          const item of
+          news.slice(0, 3)
+        ) {
+
+          await sendTelegram(
+            item
+          );
+
+        }
+
+        continue;
+      }
+
+      // =====================================
+      // NORMAL TEXT
+      // =====================================
+
       const text =
         update.message?.text;
 
@@ -615,9 +756,9 @@ async function checkTelegramCommands() {
       const chatId =
         update.message.chat.id;
 
-      // ======================
+      // =====================================
       // PING
-      // ======================
+      // =====================================
 
       if (
         text === "/ping"
@@ -638,11 +779,13 @@ async function checkTelegramCommands() {
           }
 
         );
+
+        continue;
       }
 
-      // ======================
+      // =====================================
       // STOP NEWS
-      // ======================
+      // =====================================
 
       if (
         text === "/stop"
@@ -665,11 +808,13 @@ async function checkTelegramCommands() {
           }
 
         );
+
+        continue;
       }
 
-      // ======================
+      // =====================================
       // START NEWS
-      // ======================
+      // =====================================
 
       if (
         text === "/startnews"
@@ -694,93 +839,13 @@ async function checkTelegramCommands() {
           }
 
         );
+
+        continue;
       }
 
-      // ======================
-      // ASK AI
-      // ======================
-
-      if (
-        text.startsWith("/ask ")
-      ) {
-
-        const prompt =
-
-          text.replace(
-            "/ask ",
-            ""
-          );
-
-        const answer =
-          await askAI(
-            prompt
-          );
-
-        await axios.post(
-
-`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
-
-          {
-
-            chat_id:
-              chatId,
-
-            text:
-              answer
-
-          }
-
-        );
-      }
-
-      // ======================
-      // TRANSLATE
-      // ======================
-
-      if (
-        text === "แปลไทย"
-      ) {
-
-        if (!latestNews)
-          continue;
-
-        const translatedTitle =
-
-          await translateText(
-            latestNews.title
-          );
-
-        const translatedSummary =
-
-          await translateText(
-            latestNews.summary
-          );
-
-        await axios.post(
-
-`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
-
-          {
-
-            chat_id:
-              chatId,
-
-            text:
-
-`📰 ${translatedTitle}
-
-📝 ${translatedSummary}
-
-🔗 ${latestNews.url}`
-
-          }
-
-        );
-      }
-
-      // ======================
+      // =====================================
       // MENU
-      // ======================
+      // =====================================
 
       if (
         text === "/menu"
@@ -866,34 +931,71 @@ async function checkTelegramCommands() {
           }
 
         );
+
+        continue;
       }
-    }
 
-    // ======================
-    // CALLBACKS
-    // ======================
-
-    for (const update of updates) {
+      // =====================================
+      // ASK AI
+      // =====================================
 
       if (
-        update.callback_query
+        text.startsWith("/ask ")
       ) {
 
-        const data =
-          update.callback_query
-            .data;
+        const prompt =
 
-        const chatId =
+          text.replace(
+            "/ask ",
+            ""
+          );
 
-          update.callback_query
-            .message.chat.id;
+        const answer =
+          await askAI(
+            prompt
+          );
 
-        currentTopic =
-          data;
+        await axios.post(
 
-        sentNews.clear();
+`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
 
-        cache.flushAll();
+          {
+
+            chat_id:
+              chatId,
+
+            text:
+              answer
+
+          }
+
+        );
+
+        continue;
+      }
+
+      // =====================================
+      // MANUAL TRANSLATE
+      // =====================================
+
+      if (
+        text === "แปลไทย"
+      ) {
+
+        if (!latestNews)
+          continue;
+
+        const translatedTitle =
+
+          await translateText(
+            latestNews.title
+          );
+
+        const translatedSummary =
+
+          await translateText(
+            latestNews.summary
+          );
 
         await axios.post(
 
@@ -906,28 +1008,19 @@ async function checkTelegramCommands() {
 
             text:
 
-`✅ เปลี่ยนหัวข้อแล้ว
+`🌐 แปลไทย
 
-📡 ${data}`
+📰 ${translatedTitle}
+
+📝 ${translatedSummary}
+
+🔗 ${latestNews.url}`
 
           }
 
         );
 
-        // ส่งข่าวใหม่ทันที
-        const news =
-          await fetchFeeds();
-
-        for (
-          const item of
-          news.slice(0, 3)
-        ) {
-
-          await sendTelegram(
-            item
-          );
-
-        }
+        continue;
       }
     }
 
@@ -941,9 +1034,9 @@ async function checkTelegramCommands() {
   }
 }
 
-// ======================
+// =====================================
 // HOME
-// ======================
+// =====================================
 
 app.get("/", (req, res) => {
 
@@ -953,9 +1046,9 @@ app.get("/", (req, res) => {
 
 });
 
-// ======================
+// =====================================
 // API
-// ======================
+// =====================================
 
 app.get(
   "/api/news",
@@ -981,9 +1074,9 @@ app.get(
   }
 );
 
-// ======================
+// =====================================
 // AUTO NEWS
-// ======================
+// =====================================
 
 setInterval(
 
@@ -1021,9 +1114,9 @@ setInterval(
   300000
 );
 
-// ======================
-// COMMAND LOOP
-// ======================
+// =====================================
+// REALTIME COMMAND LOOP
+// =====================================
 
 setInterval(
 
@@ -1036,9 +1129,9 @@ setInterval(
   5000
 );
 
-// ======================
+// =====================================
 // START SERVER
-// ======================
+// =====================================
 
 app.listen(
 
