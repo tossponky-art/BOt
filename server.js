@@ -9,6 +9,7 @@ import Parser from "rss-parser";
 dotenv.config();
 
 const app = express();
+
 const parser = new Parser();
 
 const cache = new NodeCache({
@@ -16,12 +17,12 @@ const cache = new NodeCache({
 });
 
 app.use(cors());
+
 app.use(express.json());
 
 const PORT =
   process.env.PORT || 3000;
 
-// URL Render ของมึง
 const BASE_URL =
   "https://newsbot-ecau.onrender.com";
 
@@ -112,28 +113,34 @@ async function translateText(text) {
 function analyzeSentiment(title) {
 
   const bullishWords = [
+
     "surge",
     "rise",
     "bull",
     "growth",
     "profit",
     "record",
+
     "พุ่ง",
     "กำไร",
     "โต"
+
   ];
 
   const bearishWords = [
+
     "crash",
     "hack",
     "drop",
     "lawsuit",
     "ban",
     "fear",
+
     "ร่วง",
     "ฟ้อง",
     "จับ",
     "กวาดล้าง"
+
   ];
 
   const lower =
@@ -181,6 +188,11 @@ async function fetchFeeds() {
     cache.get("news");
 
   if (cached) {
+
+    console.log(
+      "Using cache"
+    );
+
     return cached;
   }
 
@@ -189,6 +201,11 @@ async function fetchFeeds() {
   for (const url of feeds) {
 
     try {
+
+      console.log(
+        "Fetching:",
+        url
+      );
 
       const feed =
         await parser.parseURL(
@@ -251,6 +268,10 @@ async function fetchFeeds() {
         url
       );
 
+      console.log(
+        e.message
+      );
+
     }
   }
 
@@ -276,7 +297,15 @@ async function fetchFeeds() {
   all =
     unique.slice(0, 20);
 
-  cache.set("news", all);
+  cache.set(
+    "news",
+    all
+  );
+
+  console.log(
+    "Total news:",
+    all.length
+  );
 
   return all;
 }
@@ -455,7 +484,7 @@ app.post(
   }
 );
 
-// ส่งทุก 5 นาที
+// ทุก 5 นาที
 cron.schedule(
 
   "*/5 * * * *",
@@ -496,7 +525,7 @@ cron.schedule(
   }
 );
 
-// Ping กัน Render หลับ
+// กัน Render หลับ
 setInterval(
 
   async () => {
@@ -525,10 +554,47 @@ setInterval(
   300000
 );
 
-app.listen(PORT, () => {
+// เปิด server
+app.listen(
 
-  console.log(
-    `Server running on ${PORT}`
-  );
+  PORT,
 
-});
+  async () => {
+
+    console.log(
+      `Server running on ${PORT}`
+    );
+
+    console.log(
+      "FIRST FETCH START"
+    );
+
+    try {
+
+      const news =
+        await fetchFeeds();
+
+      for (
+        const item of
+        news.slice(0, 3)
+      ) {
+
+        await sendTelegram(
+          item
+        );
+
+      }
+
+      console.log(
+        "FIRST FETCH DONE"
+      );
+
+    } catch (e) {
+
+      console.log(
+        e.message
+      );
+
+    }
+  }
+);
