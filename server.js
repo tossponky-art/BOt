@@ -113,74 +113,60 @@ async function translateText(
   }
 }
 
-// GPT CHAT
-async function askGPT(prompt) {
+// GEMINI AI
+async function askAI(prompt) {
 
   try {
 
     const res =
       await axios.post(
 
-        "https://api.openai.com/v1/chat/completions",
+`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
 
         {
 
-          model: "gpt-4o-mini",
-
-          messages: [
+          contents: [
 
             {
-              role: "system",
 
-              content:
+              parts: [
 
-`คุณคือ AI Assistant ภาษาไทย
+                {
 
-ตอบเป็นภาษาไทยเสมอ
+                  text:
 
-สามารถคุย:
-- หุ้นโลก
-- AI
-- Crypto
-- เกาหลี
-- ข่าวแรงงาน
-- ข่าวโลก
-- เทคโนโลยี
+`ตอบเป็นภาษาไทยเสมอ
 
-ตอบให้เข้าใจง่าย กระชับ`
+คุณคือ AI Assistant ข่าว หุ้น Crypto AI และเกาหลี
 
-            },
+คำถาม:
 
-            {
-              role: "user",
-              content: prompt
+${prompt}`
+
+                }
+
+              ]
+
             }
 
           ]
-
-        },
-
-        {
-
-          headers: {
-
-            Authorization:
-
-`Bearer ${process.env.OPENAI_API_KEY}`
-
-          }
 
         }
 
       );
 
     return res.data
-      .choices[0]
-      .message.content;
+      .candidates?.[0]
+      ?.content?.parts?.[0]
+      ?.text ||
+
+      "❌ AI Error";
 
   } catch (e) {
 
-    return "❌ GPT Error";
+    return `❌ AI Error
+
+${e.message}`;
   }
 }
 
@@ -480,6 +466,40 @@ async function checkTelegramCommands() {
         );
       }
 
+      // ASK AI
+      if (
+        text.startsWith("/ask ")
+      ) {
+
+        const prompt =
+
+          text.replace(
+            "/ask ",
+            ""
+          );
+
+        const answer =
+          await askAI(
+            prompt
+          );
+
+        await axios.post(
+
+          `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+
+          {
+
+            chat_id:
+              chatId,
+
+            text:
+              answer
+
+          }
+
+        );
+      }
+
       // MENU
       if (
         text === "/menu"
@@ -567,41 +587,7 @@ async function checkTelegramCommands() {
         );
       }
 
-      // CHAT GPT MODE
-      if (
-        text.startsWith("/ask ")
-      ) {
-
-        const prompt =
-
-          text.replace(
-            "/ask ",
-            ""
-          );
-
-        const answer =
-          await askGPT(
-            prompt
-          );
-
-        await axios.post(
-
-          `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
-
-          {
-
-            chat_id:
-              chatId,
-
-            text:
-              answer
-
-          }
-
-        );
-      }
-
-      // แปลไทย
+      // TRANSLATE
       if (
         text === "แปลไทย"
       ) {
@@ -662,7 +648,7 @@ async function checkTelegramCommands() {
           update.callback_query
             .message.chat.id;
 
-        // translate latest
+        // translate
         if (
           data ===
           "translate_latest"
