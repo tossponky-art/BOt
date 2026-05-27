@@ -26,7 +26,7 @@ const PORT =
 const BASE_URL =
   "https://newsbot-ecau.onrender.com";
 
-// TOPICS เริ่มต้น
+// Topics เริ่มต้น
 let topics = [
 
   "AI",
@@ -64,6 +64,7 @@ async function translateText(text) {
 
     }
 
+    // API translate ก่อน
     const url =
 
       "https://api.mymemory.translated.net/get?q=" +
@@ -77,28 +78,101 @@ async function translateText(text) {
 
     const translated =
 
-      res.data.responseData
-        .translatedText;
+      res.data?.responseData
+        ?.translatedText;
 
-    console.log(
-      "Translated:",
-      translated
+    // ถ้า API ใช้ได้
+    if (
+
+      translated &&
+
+      translated !== text
+
+    ) {
+
+      console.log(
+        "API Translate:",
+        translated
+      );
+
+      return translated;
+
+    }
+
+    throw new Error(
+      "Fallback Translate"
     );
-
-    return translated;
 
   } catch (e) {
 
     console.log(
-      "Translate Error:",
-      e.message
+      "Translate fallback"
     );
 
-    return text;
+    // fallback dictionary
+    const dictionary = {
+
+      "AI": "AI",
+
+      "NVIDIA": "NVIDIA",
+
+      "stock": "หุ้น",
+
+      "market": "ตลาด",
+
+      "crypto": "คริปโต",
+
+      "bitcoin": "บิตคอยน์",
+
+      "ethereum": "อีเธอเรียม",
+
+      "surge": "พุ่ง",
+
+      "rise": "เพิ่มขึ้น",
+
+      "drop": "ร่วง",
+
+      "crash": "พัง",
+
+      "growth": "เติบโต",
+
+      "profit": "กำไร",
+
+      "workers": "แรงงาน",
+
+      "illegal": "ผิดกฎหมาย",
+
+      "Korea": "เกาหลี",
+
+      "immigration": "ตรวจคนเข้าเมือง",
+
+      "raid": "กวาดล้าง",
+
+      "Samsung": "Samsung",
+
+      "TSMC": "TSMC"
+
+    };
+
+    let translated = text;
+
+    for (const key in dictionary) {
+
+      const regex =
+        new RegExp(key, "gi");
+
+      translated =
+        translated.replace(
+          regex,
+          dictionary[key]
+        );
+    }
+
+    return translated;
   }
 }
 
-// sentiment
+// วิเคราะห์ sentiment
 function analyzeSentiment(title) {
 
   const bullishWords = [
@@ -248,17 +322,11 @@ async function fetchFeeds() {
 
                 summary:
 
-                  await translateText(
+                  x.contentSnippet ||
 
-                    x.contentSnippet ||
+                  x.title ||
 
-                    x.content ||
-
-                    x.title ||
-
-                    "ไม่มีรายละเอียด"
-
-                  ),
+                  "ไม่มีรายละเอียด",
 
                 url:
                   x.link,
@@ -442,6 +510,7 @@ async function checkTelegramCommands() {
 
         update.message?.text;
 
+      // เปลี่ยน topics
       if (
 
         text &&
@@ -497,7 +566,7 @@ ${topics.join("\n")}
         );
       }
 
-      // ดู topics ปัจจุบัน
+      // ดู topics
       if (text === "/topics") {
 
         await axios.post(
@@ -602,35 +671,7 @@ app.get(
   }
 );
 
-// ส่ง manual
-app.post(
-  "/api/send",
-
-  async (req, res) => {
-
-    try {
-
-      await sendTelegram(
-        req.body
-      );
-
-      res.json({
-        success: true
-      });
-
-    } catch (e) {
-
-      res.status(500)
-        .json({
-          error:
-            e.message
-        });
-
-    }
-  }
-);
-
-// ข่าวทุก 5 นาที
+// ส่งข่าวทุก 5 นาที
 cron.schedule(
 
   "*/5 * * * *",
@@ -642,6 +683,8 @@ cron.schedule(
     );
 
     try {
+
+      cache.del("news");
 
       const news =
         await fetchFeeds();
@@ -671,7 +714,7 @@ cron.schedule(
   }
 );
 
-// เช็ก Telegram Commands ทุก 1 นาที
+// เช็ก Telegram commands ทุก 1 นาที
 cron.schedule(
 
   "*/1 * * * *",
@@ -683,7 +726,7 @@ cron.schedule(
   }
 );
 
-// กัน Render หลับ
+// Ping กัน Render หลับ
 setInterval(
 
   async () => {
