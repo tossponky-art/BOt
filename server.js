@@ -9,7 +9,9 @@ dotenv.config();
 
 const app = express();
 
-const parser = new Parser();
+const parser = new Parser({
+  timeout: 15000
+});
 
 const cache = new NodeCache({
   stdTTL: 180
@@ -47,13 +49,19 @@ const feedMap = {
 
     "https://siamblockchain.com/feed",
 
-    "https://news.google.com/rss/search?q=Nasdaq&hl=th&gl=TH&ceid=TH:th"
+    "https://news.google.com/rss/search?q=nasdaq",
+
+    "https://news.google.com/rss/search?q=stock+market"
 
   ],
 
   AI: [
 
-    "https://www.beartai.com/feed"
+    "https://www.beartai.com/feed",
+
+    "https://news.google.com/rss/search?q=artificial+intelligence",
+
+    "https://news.google.com/rss/search?q=openai"
 
   ],
 
@@ -61,61 +69,80 @@ const feedMap = {
 
     "https://siamblockchain.com/feed",
 
-    "https://news.google.com/rss/search?q=Bitcoin&hl=th&gl=TH&ceid=TH:th"
+    "https://news.google.com/rss/search?q=bitcoin",
+
+    "https://news.google.com/rss/search?q=crypto"
 
   ],
 
   NVIDIA: [
 
-    "https://news.google.com/rss/search?q=NVIDIA&hl=th&gl=TH&ceid=TH:th"
+    "https://news.google.com/rss/search?q=nvidia"
 
   ],
 
   TSMC: [
 
-    "https://news.google.com/rss/search?q=TSMC&hl=th&gl=TH&ceid=TH:th"
+    "https://news.google.com/rss/search?q=tsmc"
 
   ],
 
   Tesla: [
 
-    "https://news.google.com/rss/search?q=Tesla&hl=th&gl=TH&ceid=TH:th"
+    "https://news.google.com/rss/search?q=tesla"
 
   ],
 
   Korea: [
 
-    "https://news.google.com/rss/search?q=เกาหลี&hl=th&gl=TH&ceid=TH:th"
+    "https://news.google.com/rss/search?q=korea"
 
   ],
 
   "Korea illegal workers": [
 
-    "https://news.google.com/rss/search?q=แรงงานเกาหลี&hl=th&gl=TH&ceid=TH:th",
+    "https://news.google.com/rss/search?q=korea+illegal+workers",
 
-    "https://news.google.com/rss/search?q=Yangsan+immigration&hl=en&gl=US&ceid=US:en"
+    "https://news.google.com/rss/search?q=yangsan+immigration",
+
+    "https://news.google.com/rss/search?q=foreign+workers+korea"
 
   ]
 
 };
 
 // ======================
-// CLEAN URL
+// CLEAN GOOGLE URL
 // ======================
 
 function cleanGoogleUrl(url) {
 
   try {
 
-    const match =
-      url.match(
-        /url=(.*?)&/
+    if (!url)
+      return "";
+
+    if (
+      !url.includes(
+        "news.google.com"
+      )
+    ) {
+
+      return url;
+    }
+
+    const parsed =
+      new URL(url);
+
+    const actualUrl =
+      parsed.searchParams.get(
+        "url"
       );
 
-    if (match?.[1]) {
+    if (actualUrl) {
 
       return decodeURIComponent(
-        match[1]
+        actualUrl
       );
 
     }
@@ -139,6 +166,9 @@ async function translateText(
 
   try {
 
+    if (!text)
+      return "";
+
     const url =
 
 `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${target}&dt=t&q=${encodeURIComponent(text)}`;
@@ -150,7 +180,12 @@ async function translateText(
       .map(x => x[0])
       .join("");
 
-  } catch {
+  } catch (e) {
+
+    console.log(
+      "Translate Error:",
+      e.message
+    );
 
     return text;
   }
@@ -334,7 +369,6 @@ async function fetchFeeds() {
 
     try {
 
-      // FIX THAI URL
       const safeUrl =
         encodeURI(rawUrl);
 
@@ -393,17 +427,13 @@ async function fetchFeeds() {
 
       console.log(
         "Feed Error:",
-        rawUrl
-      );
-
-      console.log(
         e.message
       );
 
     }
   }
 
-  // UNIQUE NEWS
+  // กันข่าวซ้ำ
   const unique = [];
 
   const seen =
@@ -463,6 +493,17 @@ async function sendTelegram(news) {
 
     latestNews = news;
 
+    // แปลไทยอัตโนมัติ
+    const thaiTitle =
+      await translateText(
+        news.title
+      );
+
+    const thaiSummary =
+      await translateText(
+        news.summary
+      );
+
     const analysis =
       analyzeSentiment(
         news.title
@@ -484,7 +525,7 @@ async function sendTelegram(news) {
 
     const message = `
 
-📰 <b>${news.title}</b>
+📰 <b>${thaiTitle}</b>
 
 📡 ${news.source}
 
@@ -497,7 +538,7 @@ ${emoji}
 ${analysis.score}
 
 📝
-${news.summary}
+${thaiSummary}
 
 🔗
 ${news.url}
@@ -526,7 +567,7 @@ ${news.url}
 
     console.log(
       "Sent:",
-      news.title
+      thaiTitle
     );
 
   } catch (e) {
@@ -829,7 +870,7 @@ async function checkTelegramCommands() {
     }
 
     // ======================
-    // CALLBACK BUTTONS
+    // CALLBACKS
     // ======================
 
     for (const update of updates) {
@@ -981,7 +1022,7 @@ setInterval(
 );
 
 // ======================
-// REALTIME COMMAND LOOP
+// COMMAND LOOP
 // ======================
 
 setInterval(
