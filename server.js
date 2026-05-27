@@ -12,7 +12,7 @@ const app = express();
 const parser = new Parser();
 
 const cache = new NodeCache({
-  stdTTL: 300
+  stdTTL: 180
 });
 
 app.use(cors());
@@ -23,10 +23,10 @@ const PORT =
 
 let newsEnabled = true;
 
+let latestNews = null;
+
 const sentNews =
   new Set();
-
-let latestNews = null;
 
 let currentTopic =
   "general";
@@ -143,7 +143,7 @@ async function translateText(
   }
 }
 
-// GEMINI AI
+// GROQ AI
 async function askAI(prompt) {
 
   try {
@@ -151,61 +151,59 @@ async function askAI(prompt) {
     const response =
       await axios.post(
 
-`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+"https://api.groq.com/openai/v1/chat/completions",
 
-        {
+      {
 
-          contents: [
+        model:
+          "llama-3.3-70b-versatile",
 
-            {
+        messages: [
 
-              role: "user",
+          {
 
-              parts: [
+            role: "system",
 
-                {
+            content:
 
-                  text:
+"ตอบเป็นภาษาไทยเสมอ ตอบสั้น กระชับ เข้าใจง่าย"
 
-`ตอบเป็นภาษาไทยเสมอ
+          },
 
-คุณคือ AI Assistant
+          {
 
-ตอบสั้น กระชับ เข้าใจง่าย
+            role: "user",
 
-คำถาม:
-
-${prompt}`
-
-                }
-
-              ]
-
-            }
-
-          ]
-
-        },
-
-        {
-
-          headers: {
-
-            "Content-Type":
-              "application/json"
+            content: prompt
 
           }
 
+        ]
+
+      },
+
+      {
+
+        headers: {
+
+          Authorization:
+
+`Bearer ${process.env.GROQ_API_KEY}`,
+
+          "Content-Type":
+            "application/json"
+
         }
 
-      );
+      }
+
+    );
 
     return (
 
       response.data
-        ?.candidates?.[0]
-        ?.content?.parts?.[0]
-        ?.text ||
+        ?.choices?.[0]
+        ?.message?.content ||
 
       "❌ AI ไม่ตอบ"
 
@@ -214,11 +212,11 @@ ${prompt}`
   } catch (e) {
 
     console.log(
-      "Gemini Error:",
+      "Groq Error:",
       e.response?.data || e.message
     );
 
-    return "❌ AI ใช้งานไม่ได้ชั่วคราว";
+    return "❌ AI ใช้งานไม่ได้";
   }
 }
 
@@ -281,7 +279,7 @@ function analyzeSentiment(title) {
   };
 }
 
-// FETCH NEWS
+// FETCH
 async function fetchFeeds() {
 
   const cacheKey =
@@ -357,7 +355,6 @@ async function fetchFeeds() {
     }
   }
 
-  // unique
   const unique = [];
 
   const seen =
@@ -481,7 +478,7 @@ ${news.url}
   }
 }
 
-// TELEGRAM COMMANDS
+// TELEGRAM
 let lastUpdateId = 0;
 
 async function checkTelegramCommands() {
@@ -566,6 +563,8 @@ async function checkTelegramCommands() {
 
         newsEnabled = true;
 
+        sentNews.clear();
+
         await axios.post(
 
 `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
@@ -583,7 +582,7 @@ async function checkTelegramCommands() {
         );
       }
 
-      // ASK AI
+      // ASK
       if (
         text.startsWith("/ask ")
       ) {
@@ -632,7 +631,7 @@ async function checkTelegramCommands() {
               chatId,
 
             text:
-              "📡 เลือกข่าว",
+              "📡 เลือกหัวข้อ",
 
             reply_markup: {
 
@@ -703,27 +702,32 @@ async function checkTelegramCommands() {
 
         );
       }
+    }
 
-      // TRANSLATE
+    // CALLBACKS
+    for (const update of updates) {
+
       if (
-        text === "แปลไทย"
+        update.callback_query
       ) {
 
-        if (!latestNews)
-          continue;
+        const data =
+          update.callback_query
+            .data;
 
-        const translatedTitle =
+        const chatId =
 
-          await translateText(
-            latestNews.title
-          );
+          update.callback_query
+            .message.chat.id;
 
-        const translatedSummary =
+        currentTopic =
+          data;
 
-          await translateText(
-            latestNews.summary
-          );
+        sentNews.clear();
 
+        cache.flushAll();
+
+        // ส่งยืนยัน
         await axios.post(
 
 `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
@@ -735,15 +739,28 @@ async function checkTelegramCommands() {
 
             text:
 
-`📰 ${translatedTitle}
+`✅ เปลี่ยนหัวข้อแล้ว
 
-📝 ${translatedSummary}
-
-🔗 ${latestNews.url}`
+📡 ${data}`
 
           }
 
         );
+
+        // ส่งข่าวใหม่ทันที
+        const news =
+          await fetchFeeds();
+
+        for (
+          const item of
+          news.slice(0, 3)
+        ) {
+
+          await sendTelegram(
+            item
+          );
+
+        }
       }
     }
 
@@ -806,7 +823,7 @@ setInterval(
 
       for (
         const item of
-        news
+        news.slice(0, 3)
       ) {
 
         await sendTelegram(
@@ -818,7 +835,7 @@ setInterval(
     } catch (e) {
 
       console.log(
-        "Auto News Error:",
+        "Auto Error:",
         e.message
       );
 
