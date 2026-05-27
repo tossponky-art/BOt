@@ -49,15 +49,22 @@ async function translateText(text) {
 
     if (!text) return "ไม่มีข้อมูล";
 
-    const url =
-      "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=th&dt=t&q=" +
-      encodeURIComponent(text);
+    const res = await axios.post(
+      "https://libretranslate.de/translate",
+      {
+        q: text,
+        source: "auto",
+        target: "th",
+        format: "text"
+      },
+      {
+        headers: {
+          "Content-Type": "application/json"
+        }
+      }
+    );
 
-    const res = await axios.get(url);
-
-    return res.data[0]
-      .map(x => x[0])
-      .join("");
+    return res.data.translatedText;
 
   } catch (e) {
 
