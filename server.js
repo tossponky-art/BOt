@@ -17,7 +17,6 @@ const cache = new NodeCache({
 });
 
 app.use(cors());
-
 app.use(express.json());
 
 const PORT =
@@ -26,20 +25,59 @@ const PORT =
 const BASE_URL =
   "https://newsbot-ecau.onrender.com";
 
-// Topics เริ่มต้น
+// TOPICS ปัจจุบัน
 let topics = [
-
   "AI",
-
   "crypto",
-
-  "nvidia",
-
-  "stock market",
-
-  "Korea illegal workers"
-
+  "nvidia"
 ];
+
+// TOPIC MAP
+const topicMap = {
+
+  "หุ้น":
+    "stock market",
+
+  "คริปโต":
+    "crypto",
+
+  "บิตคอยน์":
+    "bitcoin",
+
+  "เอไอ":
+    "AI",
+
+  "AI":
+    "AI",
+
+  "ข่าวเกาหลี":
+    "Korea news",
+
+  "แรงงานเกาหลี":
+    "Korea illegal workers",
+
+  "หยางซาน":
+    "Yangsan immigration",
+
+  "ซัมซุง":
+    "Samsung",
+
+  "เทสลา":
+    "Tesla",
+
+  "เอ็นวิเดีย":
+    "nvidia",
+
+  "ทีเอสเอ็มซี":
+    "tsmc",
+
+  "ตลาดโลก":
+    "global market",
+
+  "ข่าวเทค":
+    "technology"
+
+};
 
 // สร้าง RSS feeds
 function buildFeeds() {
@@ -53,18 +91,15 @@ function buildFeeds() {
   );
 }
 
-// แปลภาษา
+// translate
 async function translateText(text) {
 
   try {
 
     if (!text) {
-
       return "ไม่มีข้อมูล";
-
     }
 
-    // API translate ก่อน
     const url =
 
       "https://api.mymemory.translated.net/get?q=" +
@@ -81,13 +116,9 @@ async function translateText(text) {
       res.data?.responseData
         ?.translatedText;
 
-    // ถ้า API ใช้ได้
     if (
-
       translated &&
-
       translated !== text
-
     ) {
 
       console.log(
@@ -96,90 +127,27 @@ async function translateText(text) {
       );
 
       return translated;
-
     }
 
-    throw new Error(
-      "Fallback Translate"
-    );
+    throw new Error();
 
-  } catch (e) {
+  } catch {
 
     console.log(
       "Translate fallback"
     );
 
-    // fallback dictionary
-    const dictionary = {
-
-      "AI": "AI",
-
-      "NVIDIA": "NVIDIA",
-
-      "stock": "หุ้น",
-
-      "market": "ตลาด",
-
-      "crypto": "คริปโต",
-
-      "bitcoin": "บิตคอยน์",
-
-      "ethereum": "อีเธอเรียม",
-
-      "surge": "พุ่ง",
-
-      "rise": "เพิ่มขึ้น",
-
-      "drop": "ร่วง",
-
-      "crash": "พัง",
-
-      "growth": "เติบโต",
-
-      "profit": "กำไร",
-
-      "workers": "แรงงาน",
-
-      "illegal": "ผิดกฎหมาย",
-
-      "Korea": "เกาหลี",
-
-      "immigration": "ตรวจคนเข้าเมือง",
-
-      "raid": "กวาดล้าง",
-
-      "Samsung": "Samsung",
-
-      "TSMC": "TSMC"
-
-    };
-
-    let translated = text;
-
-    for (const key in dictionary) {
-
-      const regex =
-        new RegExp(key, "gi");
-
-      translated =
-        translated.replace(
-          regex,
-          dictionary[key]
-        );
-    }
-
-    return translated;
+    return text;
   }
 }
 
-// วิเคราะห์ sentiment
+// sentiment
 function analyzeSentiment(title) {
 
   const bullishWords = [
 
     "surge",
     "rise",
-    "bull",
     "growth",
     "profit",
     "record",
@@ -193,16 +161,13 @@ function analyzeSentiment(title) {
   const bearishWords = [
 
     "crash",
-    "hack",
     "drop",
-    "lawsuit",
-    "ban",
     "fear",
+    "lawsuit",
 
     "ร่วง",
-    "ฟ้อง",
-    "จับ",
-    "กวาดล้าง"
+    "กวาดล้าง",
+    "จับ"
 
   ];
 
@@ -213,49 +178,34 @@ function analyzeSentiment(title) {
 
   bullishWords.forEach(w => {
 
-    if (lower.includes(w)) {
-
+    if (lower.includes(w))
       score += 20;
-
-    }
 
   });
 
   bearishWords.forEach(w => {
 
-    if (lower.includes(w)) {
-
+    if (lower.includes(w))
       score -= 20;
-
-    }
 
   });
 
   let sentiment =
     "NEUTRAL";
 
-  if (score > 0) {
-
+  if (score > 0)
     sentiment = "BULLISH";
 
-  }
-
-  if (score < 0) {
-
+  if (score < 0)
     sentiment = "BEARISH";
 
-  }
-
   return {
-
     sentiment,
-
     score
-
   };
 }
 
-// ดึงข่าว
+// fetch news
 async function fetchFeeds() {
 
   const cached =
@@ -285,20 +235,17 @@ async function fetchFeeds() {
       );
 
       const feed =
-
         await parser.parseURL(
           url
         );
 
       const items =
-
         await Promise.all(
 
           feed.items
             .slice(0, 5)
 
             .map(
-
               async (x, i) => ({
 
                 id:
@@ -307,18 +254,11 @@ async function fetchFeeds() {
                 title:
 
                   await translateText(
-
-                    x.title ||
-
-                    "ไม่มีหัวข้อข่าว"
-
+                    x.title
                   ),
 
                 source:
-
-                  feed.title ||
-
-                  "Unknown Source",
+                  feed.title,
 
                 summary:
 
@@ -339,9 +279,7 @@ async function fetchFeeds() {
                     .toISOString()
 
               })
-
             )
-
         );
 
       all.push(...items);
@@ -351,10 +289,6 @@ async function fetchFeeds() {
       console.log(
         "Feed Error:",
         url
-      );
-
-      console.log(
-        e.message
       );
 
     }
@@ -395,11 +329,10 @@ async function fetchFeeds() {
   return all;
 }
 
-// ส่ง Telegram
+// send telegram
 async function sendTelegram(news) {
 
   const analysis =
-
     analyzeSentiment(
       news.title
     );
@@ -427,9 +360,7 @@ async function sendTelegram(news) {
 ⏰ ${news.time}
 
 ${emoji}
-<b>
-${analysis.sentiment}
-</b>
+<b>${analysis.sentiment}</b>
 
 📊 Score:
 ${analysis.score}
@@ -451,7 +382,6 @@ ${news.url}
       {
 
         chat_id:
-
           process.env
             .TELEGRAM_CHAT_ID,
 
@@ -459,10 +389,7 @@ ${news.url}
           message,
 
         parse_mode:
-          "HTML",
-
-        disable_web_page_preview:
-          false
+          "HTML"
 
       }
 
@@ -483,16 +410,12 @@ ${news.url}
   }
 }
 
-// Telegram Commands
+// TELEGRAM COMMANDS
 let lastUpdateId = 0;
 
 async function checkTelegramCommands() {
 
   try {
-
-    console.log(
-      "Checking Telegram commands..."
-    );
 
     const res =
 
@@ -505,11 +428,6 @@ async function checkTelegramCommands() {
     const updates =
       res.data.result;
 
-    console.log(
-      "Updates:",
-      updates.length
-    );
-
     for (const update of updates) {
 
       lastUpdateId =
@@ -518,16 +436,10 @@ async function checkTelegramCommands() {
       const text =
         update.message?.text;
 
-      console.log(
-        "Message:",
-        text
-      );
+      if (!text)
+        continue;
 
-      if (
-        !text
-      ) continue;
-
-      // /ping
+      // PING
       if (
         text === "/ping"
       ) {
@@ -539,7 +451,6 @@ async function checkTelegramCommands() {
           {
 
             chat_id:
-
               update.message.chat.id,
 
             text:
@@ -550,7 +461,7 @@ async function checkTelegramCommands() {
         );
       }
 
-      // /topics
+      // TOPICS
       if (
         text === "/topics"
       ) {
@@ -562,7 +473,6 @@ async function checkTelegramCommands() {
           {
 
             chat_id:
-
               update.message.chat.id,
 
             text:
@@ -576,81 +486,10 @@ ${topics.join("\n")}`
         );
       }
 
-      // /topic
+      // MENU
       if (
-
-        text.startsWith("/topic ")
-
+        text === "/menu"
       ) {
-
-        const raw =
-
-          text.replace(
-            "/topic ",
-            ""
-          );
-
-        // ไทย → อังกฤษ
-        const topicMap = {
-
-          "หุ้น":
-            "stock market",
-
-          "คริปโต":
-            "crypto",
-
-          "บิตคอยน์":
-            "bitcoin",
-
-          "เอไอ":
-            "AI",
-
-          "ข่าวเกาหลี":
-            "Korea news",
-
-          "แรงงานเกาหลี":
-            "Korea illegal workers",
-
-          "หยางซาน":
-            "Yangsan immigration",
-
-          "ซัมซุง":
-            "Samsung",
-
-          "เทสลา":
-            "Tesla",
-
-          "เอ็นวิเดีย":
-            "nvidia",
-
-          "ทีเอสเอ็มซี":
-            "tsmc"
-
-        };
-
-        topics =
-
-          raw
-            .split(",")
-
-            .map(
-              x => x.trim()
-            )
-
-            .map(t => {
-
-              return (
-                topicMap[t] || t
-              );
-
-            });
-
-        cache.del("news");
-
-        console.log(
-          "Topics updated:",
-          topics
-        );
 
         await axios.post(
 
@@ -659,16 +498,131 @@ ${topics.join("\n")}`
           {
 
             chat_id:
-
               update.message.chat.id,
 
             text:
+              "📡 เลือกหัวข้อข่าว",
 
-`✅ เปลี่ยน Topics แล้ว
+            reply_markup: {
 
-${topics.join("\n")}
+              inline_keyboard: [
 
-⏳ รอรอบ fetch ถัดไป`
+                [
+                  {
+                    text: "🤖 AI",
+                    callback_data: "AI"
+                  },
+
+                  {
+                    text: "📈 หุ้น",
+                    callback_data:
+                      "stock market"
+                  }
+                ],
+
+                [
+                  {
+                    text: "₿ Crypto",
+                    callback_data:
+                      "crypto"
+                  },
+
+                  {
+                    text: "🪙 Bitcoin",
+                    callback_data:
+                      "bitcoin"
+                  }
+                ],
+
+                [
+                  {
+                    text: "🟢 NVIDIA",
+                    callback_data:
+                      "nvidia"
+                  },
+
+                  {
+                    text: "⚙️ TSMC",
+                    callback_data:
+                      "tsmc"
+                  }
+                ],
+
+                [
+                  {
+                    text: "🇰🇷 เกาหลี",
+                    callback_data:
+                      "Korea news"
+                  },
+
+                  {
+                    text:
+                      "👮 แรงงาน",
+                    callback_data:
+                      "Korea illegal workers"
+                  }
+                ],
+
+                [
+                  {
+                    text: "🏭 Samsung",
+                    callback_data:
+                      "Samsung"
+                  },
+
+                  {
+                    text: "🚘 Tesla",
+                    callback_data:
+                      "Tesla"
+                  }
+                ]
+
+              ]
+
+            }
+
+          }
+
+        );
+      }
+    }
+
+    // CALLBACK BUTTONS
+    for (const update of updates) {
+
+      if (
+        update.callback_query
+      ) {
+
+        const data =
+          update.callback_query
+            .data;
+
+        const chatId =
+
+          update.callback_query
+            .message.chat.id;
+
+        topics = [data];
+
+        cache.del("news");
+
+        await axios.post(
+
+          `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+
+          {
+
+            chat_id:
+              chatId,
+
+            text:
+
+`✅ เปลี่ยน Topic แล้ว
+
+📡 ${data}
+
+⏳ รอ fetch รอบถัดไป`
 
           }
 
@@ -679,17 +633,14 @@ ${topics.join("\n")}
   } catch (e) {
 
     console.log(
-      "Telegram Command Error:"
-    );
-
-    console.log(
+      "Telegram Command Error:",
       e.message
     );
 
   }
 }
 
-// หน้าเว็บ
+// homepage
 app.get("/", (req, res) => {
 
   res.send(
@@ -698,7 +649,7 @@ app.get("/", (req, res) => {
 
 });
 
-// API ข่าว
+// API
 app.get(
   "/api/news",
 
@@ -709,55 +660,21 @@ app.get(
       const news =
         await fetchFeeds();
 
-      const ranked =
-
-        news
-
-          .map(n => ({
-
-            ...n,
-
-            analysis:
-
-              analyzeSentiment(
-                n.title
-              )
-
-          }))
-
-          .sort(
-
-            (a, b) =>
-
-              Math.abs(
-                b.analysis.score
-              )
-
-              -
-
-              Math.abs(
-                a.analysis.score
-              )
-
-          );
-
-      res.json(ranked);
+      res.json(news);
 
     } catch (e) {
 
       res.status(500)
         .json({
-
           error:
             e.message
-
         });
 
     }
   }
 );
 
-// ส่งข่าวทุก 5 นาที
+// AUTO FETCH
 cron.schedule(
 
   "*/5 * * * *",
@@ -800,7 +717,7 @@ cron.schedule(
   }
 );
 
-// เช็ก commands ทุก 1 นาที
+// CHECK COMMANDS
 cron.schedule(
 
   "*/1 * * * *",
@@ -812,7 +729,7 @@ cron.schedule(
   }
 );
 
-// Ping กัน Render หลับ
+// SELF PING
 setInterval(
 
   async () => {
@@ -841,7 +758,7 @@ setInterval(
   300000
 );
 
-// เปิด server
+// START SERVER
 app.listen(
 
   PORT,
