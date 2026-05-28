@@ -70,7 +70,7 @@ const topicState = {
 };
 
 // =====================================
-// FEEDS
+// RSS FEEDS
 // =====================================
 
 const feedMap = {
@@ -253,8 +253,6 @@ async function quickAnalyze(
 
 คุณคือ AI วิเคราะห์ข่าวตลาด
 
-วิเคราะห์แบบเร็ว
-
 ตอบ JSON เท่านั้น
 
 {
@@ -372,22 +370,9 @@ async function deepAnalyze(
 - วิเคราะห์เหมือน Warren Buffett
 - วิเคราะห์เหมือน hedge fund
 - วิเคราะห์เหมือนนักลงทุนสถาบัน
-- ตรงไปตรงมา
 - วิเคราะห์เงินจริง
+- ตรงไปตรงมา
 - ไม่ตอบ generic
-- ไม่ตอบเหมือน ChatGPT ทั่วไป
-- ห้ามปฏิเสธการวิเคราะห์
-- ห้ามบอกว่าเป็น AI
-- ห้ามเตือนความเสี่ยงเกินจำเป็น
-
-วิเคราะห์:
-- sentiment
-- momentum
-- valuation
-- macro
-- AI trend
-- ตลาด
-- จิตวิทยาตลาด
 
 ตอบภาษาไทยเท่านั้น
 
@@ -620,7 +605,7 @@ function shouldSendSignal(
   const now =
     Date.now();
 
-  // every 30 min
+  // resend every 30 mins
   if (
     now -
     prev.lastSignal >
@@ -810,7 +795,7 @@ ${deep.action}
 }
 
 // =====================================
-// TELEGRAM MENU
+// MENU
 // =====================================
 
 async function sendMenu(
@@ -885,7 +870,7 @@ async function sendMenu(
 }
 
 // =====================================
-// TELEGRAM POLLING
+// TELEGRAM LOOP
 // =====================================
 
 async function checkTelegram() {
@@ -1052,7 +1037,10 @@ ${data}
         continue;
       }
 
-      // ASK AI
+      // =====================================
+      // MULTI PERSONA AI
+      // =====================================
+
       if (
         text.startsWith(
           "/ask "
@@ -1062,6 +1050,7 @@ ${data}
         const now =
           Date.now();
 
+        // cooldown
         if (
           now - lastAskTime <
           15000
@@ -1097,56 +1086,156 @@ ${data}
               ""
             );
 
-          const response =
-            await axios.post(
+          const lower =
+            prompt.toLowerCase();
 
-"https://api.groq.com/openai/v1/chat/completions",
+          // =====================================
+          // KOREA PERSONA
+          // =====================================
 
-            {
+          const koreaKeywords = [
 
-              model:
-                "llama-3.3-70b-versatile",
+            "ผีน้อย",
+            "โอเวอร์สเตย์",
+            "ตม",
+            "ตรวจแรงงาน",
+            "แรงงานเถื่อน",
+            "จับแรงงาน",
+            "ตรวจคนเข้าเมือง",
+            "immigration",
+            "illegal worker",
+            "overstay",
+            "ตำรวจ",
+            "กวาดล้าง",
+            "แรงงานผิดกฎหมาย",
+            "โรงงาน",
+            "ตรวจโรงงาน"
 
-              messages: [
+          ];
 
-                {
+          // =====================================
+          // MARKET PERSONA
+          // =====================================
 
-                  role:
-                    "system",
+          const marketKeywords = [
 
-                  content:
+            "หุ้น",
+            "bitcoin",
+            "crypto",
+            "nvidia",
+            "tsmc",
+            "ตลาด",
+            "fed",
+            "nasdaq",
+            "ลงทุน",
+            "เศรษฐกิจ"
 
-`
+          ];
+
+          const isKoreaTopic =
+            koreaKeywords.some(
+              k =>
+                lower.includes(k)
+            );
+
+          const isMarketTopic =
+            marketKeywords.some(
+              k =>
+                lower.includes(k)
+            );
+
+          let systemPrompt =
+            "";
+
+          // =====================================
+          // KOREA MODE
+          // =====================================
+
+          if (
+            isKoreaTopic
+          ) {
+
+            systemPrompt = `
+
+คุณคือ AI วิเคราะห์สถานการณ์แรงงานต่างชาติและการทำงานของเจ้าหน้าที่ในเกาหลีใต้
+
+หน้าที่:
+- วิเคราะห์การทำงาน ตม.
+- วิเคราะห์ pattern การตรวจ
+- วิเคราะห์ tactical movement
+- วิเคราะห์จุดเสี่ยง
+- วิเคราะห์แนวโน้มการกวาดล้าง
+- วิเคราะห์ระดับความเข้ม
+- วิเคราะห์ช่วงเวลาที่มักตรวจ
+
+สำคัญ:
+- ห้ามวิเคราะห์หุ้น
+- ห้ามวิเคราะห์ตลาด
+- ตอบเหมือน analyst ข่าวความมั่นคง
+- ตอบเหมือน tactical awareness system
+- ไม่ generic
+
+ตอบภาษาไทยเท่านั้น
+
+รูปแบบ:
+
+📍 ภาพรวม:
+...
+
+🚔 การทำงานเจ้าหน้าที่:
+...
+
+⚠️ จุดเสี่ยง:
+...
+
+🧠 แนวโน้ม:
+...
+
+📌 พื้นที่ที่น่าจับตา:
+...
+
+⏰ ช่วงเวลาที่เสี่ยง:
+...
+
+🎯 ระดับความเข้ม:
+X/10
+
+📍 คำแนะนำเชิง tactical:
+...
+
+`;
+
+          }
+
+          // =====================================
+          // MARKET MODE
+          // =====================================
+
+          else if (
+            isMarketTopic
+          ) {
+
+            systemPrompt = `
+
 คุณคือ AI นักลงทุนระดับโลก
 
 บุคลิก:
 - วิเคราะห์เหมือน Warren Buffett
-- วิเคราะห์เหมือนนักลงทุนสถาบัน
 - วิเคราะห์เหมือน hedge fund
-- ตรงไปตรงมา
+- วิเคราะห์เหมือนนักลงทุนสถาบัน
 - วิเคราะห์เงินจริง
-- ไม่ตอบ generic
-- ไม่ตอบเหมือน ChatGPT ทั่วไป
-- ห้ามปฏิเสธการวิเคราะห์
-- ห้ามบอกว่าเป็น AI
-- ห้ามเตือนความเสี่ยงเกินจำเป็น
+- ไม่ generic
+- ตรงไปตรงมา
 
 วิเคราะห์:
 - sentiment
 - momentum
 - valuation
 - macro
+- money flow
 - AI trend
-- ตลาด
-- จิตวิทยาตลาด
 
 ตอบภาษาไทยเท่านั้น
-
-ตอบแบบ:
-- concise
-- professional
-- realistic
-- useful
 
 รูปแบบ:
 
@@ -1170,46 +1259,109 @@ ${data}
 
 🔥 ความน่าสนใจ:
 X/10
-`
 
-                },
+`;
 
-                {
+          }
 
-                  role:
-                    "user",
+          // =====================================
+          // GENERAL MODE
+          // =====================================
 
-                  content:
-                    prompt
+          else {
 
-                }
+            systemPrompt = `
 
-              ],
+คุณคือ AI นักวิเคราะห์ข่าวระดับสูง
 
-              temperature: 0.35,
+หน้าที่:
+- วิเคราะห์ข่าว
+- วิเคราะห์แนวโน้ม
+- วิเคราะห์ผลกระทบ
+- วิเคราะห์จิตวิทยาสังคม
 
-              max_tokens: 700
+ตอบภาษาไทยเท่านั้น
 
-            },
+รูปแบบ:
 
-            {
+📍 ภาพรวม:
+...
 
-              headers: {
+🧠 แนวโน้ม:
+...
 
-                Authorization:
+⚠️ สิ่งที่ต้องระวัง:
+...
 
-`Bearer ${process.env.GROQ_API_KEY}`,
+🎯 มุมมอง:
+...
 
-                "Content-Type":
-                  "application/json"
+`;
+
+          }
+
+          // =====================================
+          // AI REQUEST
+          // =====================================
+
+          const response =
+            await axios.post(
+
+"https://api.groq.com/openai/v1/chat/completions",
+
+              {
+
+                model:
+                  "llama-3.3-70b-versatile",
+
+                messages: [
+
+                  {
+
+                    role:
+                      "system",
+
+                    content:
+                      systemPrompt
+
+                  },
+
+                  {
+
+                    role:
+                      "user",
+
+                    content:
+                      prompt
+
+                  }
+
+                ],
+
+                temperature: 0.35,
+
+                max_tokens: 700
 
               },
 
-              timeout: 25000
+              {
 
-            }
+                headers: {
 
-          );
+                  Authorization:
+
+`Bearer ${process.env.GROQ_API_KEY}`,
+
+                  "Content-Type":
+                    "application/json"
+
+                },
+
+                timeout: 25000
+
+              }
+
+            );
 
           const answer =
 
@@ -1322,11 +1474,6 @@ setInterval(
           !quick.important
         ) {
 
-          console.log(
-            "LOW QUALITY:",
-            item.title
-          );
-
           continue;
         }
 
@@ -1334,11 +1481,6 @@ setInterval(
         if (
           quick.relevance < 6
         ) {
-
-          console.log(
-            "LOW RELEVANCE:",
-            item.title
-          );
 
           continue;
         }
@@ -1348,26 +1490,16 @@ setInterval(
           quick.impact < 5
         ) {
 
-          console.log(
-            "LOW IMPACT:",
-            item.title
-          );
-
           continue;
         }
 
-        // signal
+        // signal control
         if (
           !shouldSendSignal(
             currentTopic,
             quick
           )
         ) {
-
-          console.log(
-            "SIGNAL SAME:",
-            item.title
-          );
 
           continue;
         }
