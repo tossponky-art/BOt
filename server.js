@@ -44,22 +44,27 @@ const topicState = {
 
   NVIDIA: {
     sentiment: null,
-    lastSignal: null
+    lastSignal: 0
   },
 
   TSMC: {
     sentiment: null,
-    lastSignal: null
+    lastSignal: 0
   },
 
   Bitcoin: {
     sentiment: null,
-    lastSignal: null
+    lastSignal: 0
   },
 
   Korea: {
     sentiment: null,
-    lastSignal: null
+    lastSignal: 0
+  },
+
+  general: {
+    sentiment: null,
+    lastSignal: 0
   }
 
 };
@@ -84,13 +89,17 @@ const feedMap = {
 
     "https://news.google.com/rss/search?q=nvidia",
 
-    "https://news.google.com/rss/search?q=nvidia+earnings"
+    "https://news.google.com/rss/search?q=nvidia+earnings",
+
+    "https://news.google.com/rss/search?q=ai+gpu"
 
   ],
 
   TSMC: [
 
-    "https://news.google.com/rss/search?q=tsmc"
+    "https://news.google.com/rss/search?q=tsmc",
+
+    "https://news.google.com/rss/search?q=semiconductor"
 
   ],
 
@@ -106,14 +115,16 @@ const feedMap = {
 
     "https://news.google.com/rss/search?q=korea+immigration",
 
-    "https://news.google.com/rss/search?q=foreign+workers+korea"
+    "https://news.google.com/rss/search?q=foreign+workers+korea",
+
+    "https://news.google.com/rss/search?q=south+korea+illegal+workers"
 
   ]
 
 };
 
 // =====================================
-// SIMPLE TITLE TRANSLATE
+// TRANSLATE TITLE ONLY
 // =====================================
 
 async function translateTitle(
@@ -143,7 +154,12 @@ async function translateTitle(
       .map(x => x[0])
       .join("");
 
-  } catch {
+  } catch (e) {
+
+    console.log(
+      "Translate Error:",
+      e.message
+    );
 
     return text;
   }
@@ -169,7 +185,8 @@ ${item.summary}`
 
       "nvidia",
       "gpu",
-      "ai chip"
+      "ai chip",
+      "cuda"
 
     ],
 
@@ -185,7 +202,8 @@ ${item.summary}`
 
       "bitcoin",
       "crypto",
-      "btc"
+      "btc",
+      "ethereum"
 
     ],
 
@@ -193,7 +211,8 @@ ${item.summary}`
 
       "korea",
       "foreign workers",
-      "immigration"
+      "immigration",
+      "illegal workers"
 
     ],
 
@@ -202,7 +221,8 @@ ${item.summary}`
       "stocks",
       "market",
       "nasdaq",
-      "fed"
+      "fed",
+      "interest rates"
 
     ]
 
@@ -220,7 +240,7 @@ ${item.summary}`
 }
 
 // =====================================
-// QUICK AI
+// QUICK AI ANALYSIS
 // =====================================
 
 async function quickAnalyze(
@@ -233,7 +253,7 @@ async function quickAnalyze(
 
 คุณคือ AI วิเคราะห์ข่าวตลาด
 
-วิเคราะห์เร็วมาก
+วิเคราะห์แบบเร็ว
 
 ตอบ JSON เท่านั้น
 
@@ -262,8 +282,13 @@ ${news.title}
         messages: [
 
           {
-            role: "user",
-            content: prompt
+
+            role:
+              "user",
+
+            content:
+              prompt
+
           }
 
         ],
@@ -330,7 +355,7 @@ ${news.title}
 }
 
 // =====================================
-// DEEP AI
+// DEEP AI ANALYSIS
 // =====================================
 
 async function deepAnalyze(
@@ -341,14 +366,30 @@ async function deepAnalyze(
 
     const prompt = `
 
-คุณคือ AI นักลงทุนระดับสูง
+คุณคือ AI นักลงทุนระดับโลก
+
+บุคลิก:
+- วิเคราะห์เหมือน Warren Buffett
+- วิเคราะห์เหมือน hedge fund
+- วิเคราะห์เหมือนนักลงทุนสถาบัน
+- ตรงไปตรงมา
+- วิเคราะห์เงินจริง
+- ไม่ตอบ generic
+- ไม่ตอบเหมือน ChatGPT ทั่วไป
+- ห้ามปฏิเสธการวิเคราะห์
+- ห้ามบอกว่าเป็น AI
+- ห้ามเตือนความเสี่ยงเกินจำเป็น
+
+วิเคราะห์:
+- sentiment
+- momentum
+- valuation
+- macro
+- AI trend
+- ตลาด
+- จิตวิทยาตลาด
 
 ตอบภาษาไทยเท่านั้น
-
-วิเคราะห์ข่าวนี้ให้:
-- concise
-- useful
-- professional
 
 ตอบ JSON เท่านั้น
 
@@ -356,6 +397,7 @@ async function deepAnalyze(
  "summary":"",
  "short_term":"",
  "long_term":"",
+ "market_view":"",
  "risk":"",
  "action":"",
  "signal_strength":0
@@ -382,15 +424,20 @@ ${news.summary}
         messages: [
 
           {
-            role: "user",
-            content: prompt
+
+            role:
+              "user",
+
+            content:
+              prompt
+
           }
 
         ],
 
-        temperature: 0.15,
+        temperature: 0.3,
 
-        max_tokens: 450
+        max_tokens: 700
 
       },
 
@@ -407,7 +454,7 @@ ${news.summary}
 
         },
 
-        timeout: 20000
+        timeout: 25000
 
       }
 
@@ -445,6 +492,9 @@ ${news.summary}
       long_term:
         "ไม่มีข้อมูล",
 
+      market_view:
+        "ไม่มีข้อมูล",
+
       risk:
         "ไม่มีข้อมูล",
 
@@ -458,7 +508,7 @@ ${news.summary}
 }
 
 // =====================================
-// FETCH NEWS
+// FETCH FEEDS
 // =====================================
 
 async function fetchFeeds() {
@@ -549,7 +599,7 @@ async function fetchFeeds() {
 }
 
 // =====================================
-// SIGNAL CHANGE
+// SIGNAL CONTROL
 // =====================================
 
 function shouldSendSignal(
@@ -567,6 +617,30 @@ function shouldSendSignal(
   const prev =
     topicState[topic];
 
+  const now =
+    Date.now();
+
+  // every 30 min
+  if (
+    now -
+    prev.lastSignal >
+    1800000
+  ) {
+
+    topicState[topic] = {
+
+      sentiment:
+        quick.sentiment,
+
+      lastSignal:
+        now
+
+    };
+
+    return true;
+  }
+
+  // sentiment changed
   if (
     prev.sentiment !==
     quick.sentiment
@@ -578,7 +652,7 @@ function shouldSendSignal(
         quick.sentiment,
 
       lastSignal:
-        Date.now()
+        now
 
     };
 
@@ -589,7 +663,7 @@ function shouldSendSignal(
 }
 
 // =====================================
-// TELEGRAM SEND
+// SEND TELEGRAM
 // =====================================
 
 async function sendTelegram(
@@ -664,7 +738,6 @@ ${quick.impact}/10
 
 `;
 
-    // only important news
     if (
       deep
     ) {
@@ -680,13 +753,16 @@ ${deep.summary}
 📈 ระยะสั้น:
 ${deep.short_term}
 
-📉 ระยะยาว:
+📉 ระยะกลาง:
 ${deep.long_term}
+
+🧠 มุมมองตลาด:
+${deep.market_view}
 
 ⚠️ ความเสี่ยง:
 ${deep.risk}
 
-🎯 คำแนะนำ:
+🎯 จังหวะ:
 ${deep.action}
 
 `;
@@ -734,7 +810,7 @@ ${deep.action}
 }
 
 // =====================================
-// MENU
+// TELEGRAM MENU
 // =====================================
 
 async function sendMenu(
@@ -836,6 +912,7 @@ async function checkTelegram() {
       lastUpdateId =
         update.update_id;
 
+      // CALLBACK
       if (
         update.callback_query
       ) {
@@ -867,7 +944,9 @@ async function checkTelegram() {
 
 `✅ เปลี่ยนหัวข้อเป็น:
 
-${data}`
+${data}
+
+⚡ AI Signal Engine พร้อมทำงาน`
 
           }
 
@@ -980,7 +1059,6 @@ ${data}`
         )
       ) {
 
-        // cooldown
         const now =
           Date.now();
 
@@ -1027,7 +1105,7 @@ ${data}`
             {
 
               model:
-                "llama-3.1-8b-instant",
+                "llama-3.3-70b-versatile",
 
               messages: [
 
@@ -1038,7 +1116,61 @@ ${data}`
 
                   content:
 
-`ตอบภาษาไทย concise analytical`
+`
+คุณคือ AI นักลงทุนระดับโลก
+
+บุคลิก:
+- วิเคราะห์เหมือน Warren Buffett
+- วิเคราะห์เหมือนนักลงทุนสถาบัน
+- วิเคราะห์เหมือน hedge fund
+- ตรงไปตรงมา
+- วิเคราะห์เงินจริง
+- ไม่ตอบ generic
+- ไม่ตอบเหมือน ChatGPT ทั่วไป
+- ห้ามปฏิเสธการวิเคราะห์
+- ห้ามบอกว่าเป็น AI
+- ห้ามเตือนความเสี่ยงเกินจำเป็น
+
+วิเคราะห์:
+- sentiment
+- momentum
+- valuation
+- macro
+- AI trend
+- ตลาด
+- จิตวิทยาตลาด
+
+ตอบภาษาไทยเท่านั้น
+
+ตอบแบบ:
+- concise
+- professional
+- realistic
+- useful
+
+รูปแบบ:
+
+📊 ภาพรวม:
+...
+
+📈 ระยะสั้น:
+...
+
+📉 ระยะกลาง:
+...
+
+🧠 มุมมองตลาด:
+...
+
+⚠️ ความเสี่ยง:
+...
+
+🎯 จังหวะ:
+...
+
+🔥 ความน่าสนใจ:
+X/10
+`
 
                 },
 
@@ -1054,9 +1186,9 @@ ${data}`
 
               ],
 
-              temperature: 0.3,
+              temperature: 0.35,
 
-              max_tokens: 250
+              max_tokens: 700
 
             },
 
@@ -1071,7 +1203,9 @@ ${data}`
                 "Content-Type":
                   "application/json"
 
-              }
+              },
+
+              timeout: 25000
 
             }
 
@@ -1099,7 +1233,12 @@ ${data}`
 
           );
 
-        } catch {
+        } catch (e) {
+
+          console.log(
+            "ASK AI ERROR:",
+            e.message
+          );
 
           await axios.post(
 
@@ -1111,7 +1250,7 @@ ${data}`
                 chatId,
 
               text:
-                "❌ AI ใช้งานหนักเกินไป ลองใหม่อีกที"
+                "❌ AI กำลังใช้งานหนัก ลองใหม่อีกครั้ง"
 
             }
 
@@ -1136,7 +1275,7 @@ ${data}`
 }
 
 // =====================================
-// MAIN LOOP
+// MAIN NEWS LOOP
 // =====================================
 
 setInterval(
@@ -1155,6 +1294,11 @@ setInterval(
         const item of
         news
       ) {
+
+        console.log(
+          "FILTER CHECK:",
+          item.title
+        );
 
         // keyword filter
         if (
@@ -1178,6 +1322,11 @@ setInterval(
           !quick.important
         ) {
 
+          console.log(
+            "LOW QUALITY:",
+            item.title
+          );
+
           continue;
         }
 
@@ -1185,6 +1334,11 @@ setInterval(
         if (
           quick.relevance < 6
         ) {
+
+          console.log(
+            "LOW RELEVANCE:",
+            item.title
+          );
 
           continue;
         }
@@ -1194,10 +1348,15 @@ setInterval(
           quick.impact < 5
         ) {
 
+          console.log(
+            "LOW IMPACT:",
+            item.title
+          );
+
           continue;
         }
 
-        // signal unchanged
+        // signal
         if (
           !shouldSendSignal(
             currentTopic,
@@ -1205,13 +1364,18 @@ setInterval(
           )
         ) {
 
+          console.log(
+            "SIGNAL SAME:",
+            item.title
+          );
+
           continue;
         }
 
         let deep =
           null;
 
-        // deep only important
+        // deep analysis only important
         if (
           quick.relevance >=
             8 &&
@@ -1224,7 +1388,7 @@ setInterval(
             );
         }
 
-        // send
+        // send telegram
         await sendTelegram(
           item,
           quick,
@@ -1288,7 +1452,7 @@ app.get("/", (req, res) => {
 });
 
 // =====================================
-// HEALTH
+// HEALTH CHECK
 // =====================================
 
 app.get("/health", (req, res) => {
@@ -1303,14 +1467,17 @@ app.get("/health", (req, res) => {
     newsEnabled,
 
     uptime:
-      process.uptime()
+      process.uptime(),
+
+    memory:
+      process.memoryUsage()
 
   });
 
 });
 
 // =====================================
-// START
+// START SERVER
 // =====================================
 
 app.listen(
