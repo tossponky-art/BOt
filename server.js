@@ -19,26 +19,7 @@ const PORT =
   process.env.PORT || 3000;
 
 // =====================================
-// USER PROFILE
-// =====================================
-
-const userProfile = {
-
-  interests: [
-
-    "AI",
-    "NVIDIA",
-    "TSMC",
-    "Bitcoin",
-    "Korea",
-    "Immigration"
-
-  ]
-
-};
-
-// =====================================
-// SETTINGS
+// SYSTEM STATE
 // =====================================
 
 let currentTopic =
@@ -46,8 +27,40 @@ let currentTopic =
 
 let newsEnabled = true;
 
+let lastUpdateId = 0;
+
+let isPolling = false;
+
+// =====================================
+// CACHE
+// =====================================
+
 const sentNews =
   new Set();
+
+const topicState = {
+
+  NVIDIA: {
+    sentiment: null,
+    lastSignal: null
+  },
+
+  TSMC: {
+    sentiment: null,
+    lastSignal: null
+  },
+
+  Bitcoin: {
+    sentiment: null,
+    lastSignal: null
+  },
+
+  Korea: {
+    sentiment: null,
+    lastSignal: null
+  }
+
+};
 
 // =====================================
 // FEEDS
@@ -59,19 +72,9 @@ const feedMap = {
 
     "https://news.google.com/rss/search?q=stock+market",
 
-    "https://news.google.com/rss/search?q=nasdaq",
+    "https://news.google.com/rss/search?q=federal+reserve",
 
-    "https://news.google.com/rss/search?q=federal+reserve"
-
-  ],
-
-  AI: [
-
-    "https://news.google.com/rss/search?q=artificial+intelligence",
-
-    "https://news.google.com/rss/search?q=openai",
-
-    "https://news.google.com/rss/search?q=nvidia+ai"
+    "https://news.google.com/rss/search?q=nasdaq"
 
   ],
 
@@ -79,13 +82,17 @@ const feedMap = {
 
     "https://news.google.com/rss/search?q=nvidia",
 
-    "https://news.google.com/rss/search?q=nvidia+earnings"
+    "https://news.google.com/rss/search?q=nvidia+earnings",
+
+    "https://news.google.com/rss/search?q=ai+gpu"
 
   ],
 
   TSMC: [
 
-    "https://news.google.com/rss/search?q=tsmc"
+    "https://news.google.com/rss/search?q=tsmc",
+
+    "https://news.google.com/rss/search?q=semiconductor"
 
   ],
 
@@ -103,7 +110,7 @@ const feedMap = {
 
     "https://news.google.com/rss/search?q=foreign+workers+korea",
 
-    "https://news.google.com/rss/search?q=yangsan+immigration"
+    "https://news.google.com/rss/search?q=south+korea+illegal+workers"
 
   ]
 
@@ -143,50 +150,40 @@ async function translateText(
 // QUICK FILTER
 // =====================================
 
-function quickFilter(news) {
+function quickFilter(
+  item
+) {
 
   const text =
 
-`${news.title}
-${news.summary}`
+`${item.title}
+${item.summary}`
 .toLowerCase();
 
   const keywords = [
 
-    "ai",
     "nvidia",
     "tsmc",
     "bitcoin",
     "crypto",
+    "federal reserve",
+    "ai",
+    "gpu",
     "immigration",
     "foreign workers",
-    "raid",
-    "deport",
-    "federal reserve",
-    "interest rate",
+    "semiconductor",
     "earnings",
     "stocks"
 
   ];
 
-  for (
-    const k of keywords
-  ) {
-
-    if (
-      text.includes(k)
-    ) {
-
-      return true;
-    }
-  }
-
-  return false;
+  return keywords.some(
+    x => text.includes(x)
+  );
 }
 
 // =====================================
-// QUICK AI ANALYSIS
-// FAST MODE
+// QUICK AI
 // =====================================
 
 async function quickAnalyze(
@@ -197,20 +194,19 @@ async function quickAnalyze(
 
     const prompt = `
 
-คุณคือ AI Signal Filter
+Analyze this news quickly.
 
-วิเคราะห์เร็ว
-
-ตอบ JSON เท่านั้น
+Return ONLY JSON.
 
 {
  "relevance":0,
  "impact":0,
  "important":true,
- "sentiment":""
+ "sentiment":"BULLISH/BEARISH/NEUTRAL",
+ "signal":""
 }
 
-ข่าว:
+News:
 ${news.title}
 
 `;
@@ -228,18 +224,15 @@ ${news.title}
         messages: [
 
           {
-
             role: "user",
-
             content: prompt
-
           }
 
         ],
 
         temperature: 0.1,
 
-        max_tokens: 120
+        max_tokens: 150
 
       },
 
@@ -274,7 +267,12 @@ ${news.title}
 
     return JSON.parse(clean);
 
-  } catch {
+  } catch (e) {
+
+    console.log(
+      "Quick AI Error:",
+      e.message
+    );
 
     return {
 
@@ -285,15 +283,17 @@ ${news.title}
       important: false,
 
       sentiment:
-        "NEUTRAL"
+        "NEUTRAL",
+
+      signal:
+        "NONE"
 
     };
   }
 }
 
 // =====================================
-// DEEP AI ANALYSIS
-// ONLY IMPORTANT NEWS
+// DEEP AI
 // =====================================
 
 async function deepAnalyze(
@@ -304,11 +304,11 @@ async function deepAnalyze(
 
     const prompt = `
 
-คุณคือ AI Financial Intelligence Analyst
+You are an elite AI market analyst.
 
-วิเคราะห์ข่าวนี้เชิงลึก
+Analyze this news deeply.
 
-ตอบ JSON เท่านั้น
+Return ONLY JSON.
 
 {
  "summary":"",
@@ -320,17 +320,10 @@ async function deepAnalyze(
  "signal_strength":0
 }
 
-วิเคราะห์แบบ:
-- นักลงทุนมืออาชีพ
-- concise
-- useful
-- analytical
-- ไม่ generic
-
-ข่าว:
+News:
 ${news.title}
 
-รายละเอียด:
+Details:
 ${news.summary}
 
 `;
@@ -348,11 +341,8 @@ ${news.summary}
         messages: [
 
           {
-
             role: "user",
-
             content: prompt
-
           }
 
         ],
@@ -394,12 +384,17 @@ ${news.summary}
 
     return JSON.parse(clean);
 
-  } catch {
+  } catch (e) {
+
+    console.log(
+      "Deep AI Error:",
+      e.message
+    );
 
     return {
 
       summary:
-        "No summary",
+        "Analysis unavailable",
 
       market_impact:
         "Unknown",
@@ -428,92 +423,160 @@ ${news.summary}
 
 async function fetchFeeds() {
 
-  const feeds =
+  try {
 
-    feedMap[currentTopic] ||
+    const feeds =
 
-    feedMap.general;
+      feedMap[currentTopic] ||
 
-  let all = [];
+      feedMap.general;
 
-  for (const url of feeds) {
+    let all = [];
 
-    try {
+    for (const url of feeds) {
 
-      const feed =
-        await parser.parseURL(
-          encodeURI(url)
+      try {
+
+        const feed =
+          await parser.parseURL(
+            encodeURI(url)
+          );
+
+        const items =
+          feed.items
+            .slice(0, 5)
+
+            .map((x, i) => ({
+
+              id:
+                `${Date.now()}-${i}`,
+
+              title:
+                x.title ||
+                "No title",
+
+              summary:
+
+                x.contentSnippet ||
+                "No summary",
+
+              url:
+                x.link || "",
+
+              time:
+
+                x.pubDate ||
+
+                new Date()
+                  .toISOString()
+
+            }));
+
+        all.push(...items);
+
+      } catch (e) {
+
+        console.log(
+          "Feed Error:",
+          e.message
         );
 
-      const items =
-        feed.items
-          .slice(0, 5)
-
-          .map((x, i) => ({
-
-            id:
-              `${Date.now()}-${i}`,
-
-            title:
-              x.title ||
-
-              "No title",
-
-            summary:
-
-              x.contentSnippet ||
-
-              "No summary",
-
-            url:
-              x.link ||
-
-              "",
-
-            time:
-
-              x.pubDate ||
-
-              new Date()
-                .toISOString()
-
-          }));
-
-      all.push(...items);
-
-    } catch (e) {
-
-      console.log(
-        "Feed Error:",
-        e.message
-      );
-
+      }
     }
-  }
 
-  const unique = [];
+    const unique = [];
 
-  const seen =
-    new Set();
+    const seen =
+      new Set();
 
-  for (const item of all) {
+    for (const item of all) {
 
-    if (
-      !seen.has(item.title)
-    ) {
+      if (
+        !seen.has(item.title)
+      ) {
 
-      seen.add(item.title);
+        seen.add(item.title);
 
-      unique.push(item);
+        unique.push(item);
 
+      }
     }
-  }
 
-  return unique;
+    return unique;
+
+  } catch (e) {
+
+    console.log(
+      "Fetch Error:",
+      e.message
+    );
+
+    return [];
+  }
 }
 
 // =====================================
-// SEND TELEGRAM
+// SIGNAL CHANGE DETECTION
+// =====================================
+
+function shouldSendSignal(
+  topic,
+  quick
+) {
+
+  if (
+    !topicState[topic]
+  ) {
+
+    return true;
+  }
+
+  const prev =
+    topicState[topic];
+
+  // sentiment changed
+  if (
+    prev.sentiment !==
+    quick.sentiment
+  ) {
+
+    topicState[topic] = {
+
+      sentiment:
+        quick.sentiment,
+
+      lastSignal:
+        quick.signal
+
+    };
+
+    return true;
+  }
+
+  // signal changed
+  if (
+    prev.lastSignal !==
+    quick.signal
+  ) {
+
+    topicState[topic] = {
+
+      sentiment:
+        quick.sentiment,
+
+      lastSignal:
+        quick.signal
+
+    };
+
+    return true;
+  }
+
+  return false;
+}
+
+// =====================================
+// TELEGRAM SEND
 // =====================================
 
 async function sendTelegram(
@@ -536,9 +599,8 @@ async function sendTelegram(
       return;
     }
 
-    // FILTER LOW QUALITY
     if (
-      quick.relevance < 5
+      quick.relevance < 6
     ) {
 
       console.log(
@@ -549,11 +611,25 @@ async function sendTelegram(
     }
 
     if (
-      quick.impact < 4
+      quick.impact < 5
     ) {
 
       console.log(
         "Skip low impact"
+      );
+
+      return;
+    }
+
+    if (
+      !shouldSendSignal(
+        currentTopic,
+        quick
+      )
+    ) {
+
+      console.log(
+        "No important signal change"
       );
 
       return;
@@ -564,45 +640,38 @@ async function sendTelegram(
     );
 
     const thaiTitle =
-
       await translateText(
         news.title
       );
 
     const thaiSummary =
-
       await translateText(
         deep.summary
       );
 
-    const thaiMarket =
-
-      await translateText(
-        deep.market_impact
-      );
-
     const thaiShort =
-
       await translateText(
         deep.short_term
       );
 
     const thaiLong =
-
       await translateText(
         deep.long_term
       );
 
     const thaiRisk =
-
       await translateText(
         deep.risk
       );
 
     const thaiAction =
-
       await translateText(
         deep.action
+      );
+
+    const thaiImpact =
+      await translateText(
+        deep.market_impact
       );
 
     const emoji =
@@ -624,7 +693,7 @@ async function sendTelegram(
 📰 <b>${thaiTitle}</b>
 
 ${emoji}
-<b>${quick.sentiment}</b>
+${quick.sentiment}
 
 🔥 Relevance:
 ${quick.relevance}/10
@@ -651,7 +720,7 @@ ${thaiRisk}
 ${thaiAction}
 
 🌍 ผลต่อตลาด:
-${thaiMarket}
+${thaiImpact}
 
 🔗 ${news.url}
 
@@ -679,7 +748,7 @@ ${thaiMarket}
 
     console.log(
       "Sent:",
-      thaiTitle
+      news.title
     );
 
   } catch (e) {
@@ -719,21 +788,6 @@ async function sendMenu(
           [
 
             {
-              text: "🤖 AI",
-              callback_data: "AI"
-            },
-
-            {
-              text: "📈 Market",
-              callback_data:
-                "general"
-            }
-
-          ],
-
-          [
-
-            {
               text: "🟢 NVIDIA",
               callback_data:
                 "NVIDIA"
@@ -761,6 +815,16 @@ async function sendMenu(
                 "Korea"
             }
 
+          ],
+
+          [
+
+            {
+              text: "📈 Market",
+              callback_data:
+                "general"
+            }
+
           ]
 
         ]
@@ -773,12 +837,17 @@ async function sendMenu(
 }
 
 // =====================================
-// TELEGRAM
+// TELEGRAM POLLING
 // =====================================
 
-let lastUpdateId = 0;
-
 async function checkTelegram() {
+
+  if (isPolling) {
+
+    return;
+  }
+
+  isPolling = true;
 
   try {
 
@@ -797,7 +866,7 @@ async function checkTelegram() {
       lastUpdateId =
         update.update_id;
 
-      // CALLBACK
+      // BUTTONS
       if (
         update.callback_query
       ) {
@@ -831,60 +900,11 @@ async function checkTelegram() {
 
 ${data}
 
-⚡ Fast AI Filtering
-🧠 Deep AI Analysis`
+⚡ AI Signal Engine Activated`
 
           }
 
         );
-
-        const news =
-          await fetchFeeds();
-
-        for (
-          const item of
-          news.slice(0, 3)
-        ) {
-
-          // QUICK FILTER
-          if (
-            !quickFilter(
-              item
-            )
-          ) {
-
-            continue;
-          }
-
-          // FAST AI
-          const quick =
-
-            await quickAnalyze(
-              item
-            );
-
-          // SKIP
-          if (
-            !quick.important
-          ) {
-
-            continue;
-          }
-
-          // DEEP AI
-          const deep =
-
-            await deepAnalyze(
-              item
-            );
-
-          // SEND
-          await sendTelegram(
-            item,
-            quick,
-            deep
-          );
-        }
 
         continue;
       }
@@ -927,7 +947,7 @@ ${data}
               chatId,
 
             text:
-              "🛑 ปิดข่าวแล้ว"
+              "🛑 หยุดส่งข่าวแล้ว"
 
           }
 
@@ -953,7 +973,7 @@ ${data}
               chatId,
 
             text:
-              "✅ เปิดข่าวแล้ว"
+              "✅ เริ่มส่งข่าวแล้ว"
 
           }
 
@@ -962,103 +982,120 @@ ${data}
         continue;
       }
 
-      // AI CHAT
+      // ASK AI
       if (
-        text.startsWith("/ask ")
+        text.startsWith(
+          "/ask "
+        )
       ) {
 
-        const prompt =
-          text.replace(
-            "/ask ",
-            ""
-          );
+        try {
 
-        const response =
-          await axios.post(
+          const prompt =
+            text.replace(
+              "/ask ",
+              ""
+            );
+
+          const response =
+            await axios.post(
 
 "https://api.groq.com/openai/v1/chat/completions",
 
-          {
+            {
 
-            model:
-              "llama-3.3-70b-versatile",
+              model:
+                "llama-3.3-70b-versatile",
 
-            messages: [
+              messages: [
 
-              {
+                {
 
-                role:
-                  "system",
+                  role:
+                    "system",
 
-                content:
+                  content:
 
-`คุณคือ AI Intelligence Assistant
+`You are an elite AI intelligence assistant.
+Answer concise and analytical.`
 
-ตอบแบบ:
-- analytical
-- concise
-- useful
-- ไม่ generic
-- เน้น signal`
+                },
 
-              },
+                {
 
-              {
+                  role:
+                    "user",
 
-                role:
-                  "user",
+                  content:
+                    prompt
 
-                content:
-                  prompt
+                }
 
-              }
+              ],
 
-            ],
+              temperature: 0.3,
 
-            temperature: 0.3,
+              max_tokens: 400
 
-            max_tokens: 500
+            },
 
-          },
+            {
 
-          {
+              headers: {
 
-            headers: {
-
-              Authorization:
+                Authorization:
 
 `Bearer ${process.env.GROQ_API_KEY}`,
 
-              "Content-Type":
-                "application/json"
+                "Content-Type":
+                  "application/json"
+
+              }
 
             }
 
-          }
+          );
 
-        );
+          const answer =
 
-        const answer =
+            response.data
+              ?.choices?.[0]
+              ?.message?.content;
 
-          response.data
-            ?.choices?.[0]
-            ?.message?.content;
-
-        await axios.post(
+          await axios.post(
 
 `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
 
-          {
+            {
 
-            chat_id:
-              chatId,
+              chat_id:
+                chatId,
 
-            text:
-              answer
+              text:
+                answer
 
-          }
+            }
 
-        );
+          );
+
+        } catch (e) {
+
+          await axios.post(
+
+`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+
+            {
+
+              chat_id:
+                chatId,
+
+              text:
+                "❌ AI Error"
+
+            }
+
+          );
+        }
 
         continue;
       }
@@ -1071,11 +1108,14 @@ ${data}
       e.message
     );
 
+  } finally {
+
+    isPolling = false;
   }
 }
 
 // =====================================
-// AUTO SIGNAL LOOP
+// AUTO LOOP
 // =====================================
 
 setInterval(
@@ -1092,7 +1132,7 @@ setInterval(
 
       for (
         const item of
-        news.slice(0, 5)
+        news
       ) {
 
         // QUICK FILTER
@@ -1105,13 +1145,14 @@ setInterval(
           continue;
         }
 
-        // FAST AI
+        // QUICK AI
         const quick =
 
           await quickAnalyze(
             item
           );
 
+        // SKIP
         if (
           !quick.important
         ) {
@@ -1137,14 +1178,14 @@ setInterval(
     } catch (e) {
 
       console.log(
-        "Auto Error:",
+        "Loop Error:",
         e.message
       );
 
     }
   },
 
-  300000
+  180000
 );
 
 // =====================================
@@ -1163,10 +1204,16 @@ setInterval(
 );
 
 // =====================================
-// HOME
+// KEEP ALIVE ROUTE
 // =====================================
 
 app.get("/", (req, res) => {
+
+  console.log(
+    "PING:",
+    new Date()
+      .toISOString()
+  );
 
   res.send(
     "HYBRID AI INTELLIGENCE SYSTEM RUNNING"
@@ -1175,7 +1222,38 @@ app.get("/", (req, res) => {
 });
 
 // =====================================
-// START
+// HEALTH
+// =====================================
+
+app.get("/health", (req, res) => {
+
+  console.log(
+    "HEALTH CHECK:",
+    new Date()
+      .toISOString()
+  );
+
+  res.json({
+
+    status: "ok",
+
+    uptime:
+      process.uptime(),
+
+    topic:
+      currentTopic,
+
+    newsEnabled,
+
+    sentNews:
+      sentNews.size
+
+  });
+
+});
+
+// =====================================
+// START SERVER
 // =====================================
 
 app.listen(
