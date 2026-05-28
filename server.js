@@ -31,6 +31,8 @@ let lastUpdateId = 0;
 
 let isPolling = false;
 
+let lastAskTime = 0;
+
 // =====================================
 // CACHE
 // =====================================
@@ -82,17 +84,13 @@ const feedMap = {
 
     "https://news.google.com/rss/search?q=nvidia",
 
-    "https://news.google.com/rss/search?q=nvidia+earnings",
-
-    "https://news.google.com/rss/search?q=ai+gpu"
+    "https://news.google.com/rss/search?q=nvidia+earnings"
 
   ],
 
   TSMC: [
 
-    "https://news.google.com/rss/search?q=tsmc",
-
-    "https://news.google.com/rss/search?q=semiconductor"
+    "https://news.google.com/rss/search?q=tsmc"
 
   ],
 
@@ -108,38 +106,27 @@ const feedMap = {
 
     "https://news.google.com/rss/search?q=korea+immigration",
 
-    "https://news.google.com/rss/search?q=foreign+workers+korea",
-
-    "https://news.google.com/rss/search?q=south+korea+illegal+workers"
+    "https://news.google.com/rss/search?q=foreign+workers+korea"
 
   ]
 
 };
 
 // =====================================
-// SAFE TRANSLATE
+// SIMPLE TITLE TRANSLATE
 // =====================================
 
-async function translateText(text) {
+async function translateTitle(
+  text
+) {
 
   try {
 
-    if (!text) {
-
+    if (!text)
       return "";
-    }
 
-    text = text.replace(
-      /https?:\/\/\S+/g,
-      ""
-    );
-
-    text = text.replace(
-      /[*_#`]/g,
-      ""
-    );
-
-    text = text.slice(0, 1500);
+    text =
+      text.slice(0, 300);
 
     const url =
 
@@ -148,31 +135,15 @@ async function translateText(text) {
     const res =
       await axios.get(url, {
 
-        timeout: 10000
+        timeout: 5000
 
       });
 
-    if (
-      !res.data ||
-      !res.data[0]
-    ) {
+    return res.data[0]
+      .map(x => x[0])
+      .join("");
 
-      return text;
-    }
-
-    const translated =
-      res.data[0]
-        .map(x => x[0])
-        .join("");
-
-    return translated || text;
-
-  } catch (e) {
-
-    console.log(
-      "Translate Error:",
-      e.message
-    );
+  } catch {
 
     return text;
   }
@@ -192,24 +163,58 @@ function quickFilter(
 ${item.summary}`
 .toLowerCase();
 
-  const keywords = [
+  const keywords = {
 
-    "nvidia",
-    "tsmc",
-    "bitcoin",
-    "crypto",
-    "federal reserve",
-    "ai",
-    "gpu",
-    "immigration",
-    "foreign workers",
-    "semiconductor",
-    "earnings",
-    "stocks"
+    NVIDIA: [
 
-  ];
+      "nvidia",
+      "gpu",
+      "ai chip"
 
-  return keywords.some(
+    ],
+
+    TSMC: [
+
+      "tsmc",
+      "semiconductor",
+      "chip"
+
+    ],
+
+    Bitcoin: [
+
+      "bitcoin",
+      "crypto",
+      "btc"
+
+    ],
+
+    Korea: [
+
+      "korea",
+      "foreign workers",
+      "immigration"
+
+    ],
+
+    general: [
+
+      "stocks",
+      "market",
+      "nasdaq",
+      "fed"
+
+    ]
+
+  };
+
+  const target =
+    keywords[
+      currentTopic
+    ] ||
+    keywords.general;
+
+  return target.some(
     x => text.includes(x)
   );
 }
@@ -228,7 +233,7 @@ async function quickAnalyze(
 
 คุณคือ AI วิเคราะห์ข่าวตลาด
 
-วิเคราะห์เร็ว
+วิเคราะห์เร็วมาก
 
 ตอบ JSON เท่านั้น
 
@@ -236,8 +241,7 @@ async function quickAnalyze(
  "relevance":0,
  "impact":0,
  "important":true,
- "sentiment":"BULLISH/BEARISH/NEUTRAL",
- "signal":""
+ "sentiment":"BULLISH/BEARISH/NEUTRAL"
 }
 
 ข่าว:
@@ -253,7 +257,7 @@ ${news.title}
       {
 
         model:
-          "llama-3.3-70b-versatile",
+          "llama-3.1-8b-instant",
 
         messages: [
 
@@ -266,7 +270,7 @@ ${news.title}
 
         temperature: 0.1,
 
-        max_tokens: 150
+        max_tokens: 120
 
       },
 
@@ -281,7 +285,9 @@ ${news.title}
           "Content-Type":
             "application/json"
 
-        }
+        },
+
+        timeout: 10000
 
       }
 
@@ -317,10 +323,7 @@ ${news.title}
       important: false,
 
       sentiment:
-        "NEUTRAL",
-
-      signal:
-        "NONE"
+        "NEUTRAL"
 
     };
   }
@@ -340,47 +343,23 @@ async function deepAnalyze(
 
 คุณคือ AI นักลงทุนระดับสูง
 
-วิเคราะห์ข่าวนี้แบบมืออาชีพ
+ตอบภาษาไทยเท่านั้น
 
-สำคัญมาก:
-- ตอบเป็นภาษาไทยเท่านั้น
-- ห้ามตอบอังกฤษ
-- ห้ามใช้คำ generic
-- วิเคราะห์แบบนักลงทุนจริง
+วิเคราะห์ข่าวนี้ให้:
 - concise
 - useful
+- professional
 
 ตอบ JSON เท่านั้น
 
 {
  "summary":"",
- "market_impact":"",
  "short_term":"",
  "long_term":"",
  "risk":"",
  "action":"",
  "signal_strength":0
 }
-
-ตัวอย่างการตอบที่ดี:
-
-summary:
-"TSMC ได้ประโยชน์จาก demand AI ที่ยังแรง"
-
-short_term:
-"sentiment ยังบวกต่อหุ้น semiconductor"
-
-long_term:
-"AI boom ยังสนับสนุนรายได้ระยะยาว"
-
-risk:
-"valuation เริ่มสูงและการแข่งขันรุนแรงขึ้น"
-
-action:
-"ยังถือได้ แต่ระวังแรงขายทำกำไร"
-
-market_impact:
-"บวกต่อหุ้น AI และ semiconductor"
 
 ข่าว:
 ${news.title}
@@ -403,18 +382,15 @@ ${news.summary}
         messages: [
 
           {
-
             role: "user",
-
             content: prompt
-
           }
 
         ],
 
         temperature: 0.15,
 
-        max_tokens: 700
+        max_tokens: 450
 
       },
 
@@ -429,7 +405,9 @@ ${news.summary}
           "Content-Type":
             "application/json"
 
-        }
+        },
+
+        timeout: 20000
 
       }
 
@@ -460,9 +438,6 @@ ${news.summary}
 
       summary:
         "AI วิเคราะห์ไม่ได้",
-
-      market_impact:
-        "ไม่สามารถประเมินได้",
 
       short_term:
         "ไม่มีข้อมูล",
@@ -509,7 +484,7 @@ async function fetchFeeds() {
 
         const items =
           feed.items
-            .slice(0, 5)
+            .slice(0, 3)
 
             .map((x, i) => ({
 
@@ -523,17 +498,10 @@ async function fetchFeeds() {
               summary:
 
                 x.contentSnippet ||
-                "No summary",
+                "",
 
               url:
-                x.link || "",
-
-              time:
-
-                x.pubDate ||
-
-                new Date()
-                  .toISOString()
+                x.link || ""
 
             }));
 
@@ -581,7 +549,7 @@ async function fetchFeeds() {
 }
 
 // =====================================
-// SIGNAL CHANGE DETECTION
+// SIGNAL CHANGE
 // =====================================
 
 function shouldSendSignal(
@@ -610,25 +578,7 @@ function shouldSendSignal(
         quick.sentiment,
 
       lastSignal:
-        quick.signal
-
-    };
-
-    return true;
-  }
-
-  if (
-    prev.lastSignal !==
-    quick.signal
-  ) {
-
-    topicState[topic] = {
-
-      sentiment:
-        quick.sentiment,
-
-      lastSignal:
-        quick.signal
+        Date.now()
 
     };
 
@@ -645,7 +595,7 @@ function shouldSendSignal(
 async function sendTelegram(
   news,
   quick,
-  deep
+  deep = null
 ) {
 
   try {
@@ -662,48 +612,12 @@ async function sendTelegram(
       return;
     }
 
-    if (
-      quick.relevance < 6
-    ) {
-
-      console.log(
-        "Skip low relevance"
-      );
-
-      return;
-    }
-
-    if (
-      quick.impact < 5
-    ) {
-
-      console.log(
-        "Skip low impact"
-      );
-
-      return;
-    }
-
-    if (
-      !shouldSendSignal(
-        currentTopic,
-        quick
-      )
-    ) {
-
-      console.log(
-        "No important signal change"
-      );
-
-      return;
-    }
-
     sentNews.add(
       news.title
     );
 
     const thaiTitle =
-      await translateText(
+      await translateTitle(
         news.title
       );
 
@@ -735,7 +649,7 @@ async function sendTelegram(
 
         : "🟡";
 
-    const message = `
+    let message = `
 
 📰 <b>${thaiTitle}</b>
 
@@ -747,6 +661,15 @@ ${quick.relevance}/10
 
 📊 Impact:
 ${quick.impact}/10
+
+`;
+
+    // only important news
+    if (
+      deep
+    ) {
+
+      message += `
 
 ⚡ ความแรงสัญญาณ:
 ${deep.signal_strength}/10
@@ -766,8 +689,10 @@ ${deep.risk}
 🎯 คำแนะนำ:
 ${deep.action}
 
-🌍 ผลต่อตลาด:
-${deep.market_impact}
+`;
+    }
+
+    message += `
 
 🔗 ${news.url}
 
@@ -795,7 +720,7 @@ ${deep.market_impact}
 
     console.log(
       "Sent:",
-      thaiTitle
+      news.title
     );
 
   } catch (e) {
@@ -889,10 +814,8 @@ async function sendMenu(
 
 async function checkTelegram() {
 
-  if (isPolling) {
-
+  if (isPolling)
     return;
-  }
 
   isPolling = true;
 
@@ -944,9 +867,7 @@ async function checkTelegram() {
 
 `✅ เปลี่ยนหัวข้อเป็น:
 
-${data}
-
-⚡ AI Signal Engine พร้อมทำงาน`
+${data}`
 
           }
 
@@ -964,6 +885,7 @@ ${data}
       const chatId =
         update.message.chat.id;
 
+      // MENU
       if (
         text === "/menu"
       ) {
@@ -975,6 +897,31 @@ ${data}
         continue;
       }
 
+      // PING
+      if (
+        text === "/ping"
+      ) {
+
+        await axios.post(
+
+`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+
+          {
+
+            chat_id:
+              chatId,
+
+            text:
+              "🏓 Pong"
+
+          }
+
+        );
+
+        continue;
+      }
+
+      // STOP
       if (
         text === "/stop"
       ) {
@@ -1000,6 +947,7 @@ ${data}
         continue;
       }
 
+      // START
       if (
         text === "/startnews"
       ) {
@@ -1025,11 +973,43 @@ ${data}
         continue;
       }
 
+      // ASK AI
       if (
         text.startsWith(
           "/ask "
         )
       ) {
+
+        // cooldown
+        const now =
+          Date.now();
+
+        if (
+          now - lastAskTime <
+          15000
+        ) {
+
+          await axios.post(
+
+`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+
+            {
+
+              chat_id:
+                chatId,
+
+              text:
+                "⏳ กรุณารอ 15 วินาที"
+
+            }
+
+          );
+
+          continue;
+        }
+
+        lastAskTime =
+          now;
 
         try {
 
@@ -1047,7 +1027,7 @@ ${data}
             {
 
               model:
-                "llama-3.3-70b-versatile",
+                "llama-3.1-8b-instant",
 
               messages: [
 
@@ -1058,9 +1038,7 @@ ${data}
 
                   content:
 
-`คุณคือ AI ผู้ช่วยวิเคราะห์ข่าวและตลาดการเงิน
-ตอบเป็นภาษาไทย
-ตอบแบบ concise analytical useful`
+`ตอบภาษาไทย concise analytical`
 
                 },
 
@@ -1078,7 +1056,7 @@ ${data}
 
               temperature: 0.3,
 
-              max_tokens: 400
+              max_tokens: 250
 
             },
 
@@ -1121,7 +1099,7 @@ ${data}
 
           );
 
-        } catch (e) {
+        } catch {
 
           await axios.post(
 
@@ -1133,7 +1111,7 @@ ${data}
                 chatId,
 
               text:
-                "❌ AI Error"
+                "❌ AI ใช้งานหนักเกินไป ลองใหม่อีกที"
 
             }
 
@@ -1158,7 +1136,7 @@ ${data}
 }
 
 // =====================================
-// AUTO LOOP
+// MAIN LOOP
 // =====================================
 
 setInterval(
@@ -1178,6 +1156,7 @@ setInterval(
         news
       ) {
 
+        // keyword filter
         if (
           !quickFilter(
             item
@@ -1187,12 +1166,14 @@ setInterval(
           continue;
         }
 
+        // quick ai
         const quick =
 
           await quickAnalyze(
             item
           );
 
+        // low quality
         if (
           !quick.important
         ) {
@@ -1200,16 +1181,63 @@ setInterval(
           continue;
         }
 
-        const deep =
+        // low relevance
+        if (
+          quick.relevance < 6
+        ) {
 
-          await deepAnalyze(
-            item
-          );
+          continue;
+        }
 
+        // low impact
+        if (
+          quick.impact < 5
+        ) {
+
+          continue;
+        }
+
+        // signal unchanged
+        if (
+          !shouldSendSignal(
+            currentTopic,
+            quick
+          )
+        ) {
+
+          continue;
+        }
+
+        let deep =
+          null;
+
+        // deep only important
+        if (
+          quick.relevance >=
+            8 &&
+          quick.impact >= 7
+        ) {
+
+          deep =
+            await deepAnalyze(
+              item
+            );
+        }
+
+        // send
         await sendTelegram(
           item,
           quick,
           deep
+        );
+
+        // anti spam
+        await new Promise(
+          r =>
+            setTimeout(
+              r,
+              4000
+            )
         );
       }
 
@@ -1223,7 +1251,7 @@ setInterval(
     }
   },
 
-  180000
+  600000
 );
 
 // =====================================
@@ -1238,11 +1266,11 @@ setInterval(
 
   },
 
-  3000
+  5000
 );
 
 // =====================================
-// KEEP ALIVE ROUTE
+// KEEP ALIVE
 // =====================================
 
 app.get("/", (req, res) => {
@@ -1260,38 +1288,29 @@ app.get("/", (req, res) => {
 });
 
 // =====================================
-// HEALTH CHECK
+// HEALTH
 // =====================================
 
 app.get("/health", (req, res) => {
 
-  console.log(
-    "HEALTH CHECK:",
-    new Date()
-      .toISOString()
-  );
-
   res.json({
 
     status: "ok",
-
-    uptime:
-      process.uptime(),
 
     topic:
       currentTopic,
 
     newsEnabled,
 
-    sentNews:
-      sentNews.size
+    uptime:
+      process.uptime()
 
   });
 
 });
 
 // =====================================
-// START SERVER
+// START
 // =====================================
 
 app.listen(
