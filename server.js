@@ -117,30 +117,65 @@ const feedMap = {
 };
 
 // =====================================
-// TRANSLATE
+// SAFE TRANSLATE
 // =====================================
 
-async function translateText(
-  text
-) {
+async function translateText(text) {
 
   try {
 
-    if (!text)
+    if (!text) {
+
       return "";
+    }
+
+    // remove urls
+    text = text.replace(
+      /https?:\/\/\S+/g,
+      ""
+    );
+
+    // remove markdown
+    text = text.replace(
+      /[*_#`]/g,
+      ""
+    );
+
+    // limit length
+    text = text.slice(0, 1500);
 
     const url =
 
 `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=th&dt=t&q=${encodeURIComponent(text)}`;
 
     const res =
-      await axios.get(url);
+      await axios.get(url, {
 
-    return res.data[0]
-      .map(x => x[0])
-      .join("");
+        timeout: 10000
 
-  } catch {
+      });
+
+    if (
+      !res.data ||
+      !res.data[0]
+    ) {
+
+      return text;
+    }
+
+    const translated =
+      res.data[0]
+        .map(x => x[0])
+        .join("");
+
+    return translated || text;
+
+  } catch (e) {
+
+    console.log(
+      "Translate Error:",
+      e.message
+    );
 
     return text;
   }
@@ -534,7 +569,6 @@ function shouldSendSignal(
   const prev =
     topicState[topic];
 
-  // sentiment changed
   if (
     prev.sentiment !==
     quick.sentiment
@@ -553,7 +587,6 @@ function shouldSendSignal(
     return true;
   }
 
-  // signal changed
   if (
     prev.lastSignal !==
     quick.signal
@@ -674,6 +707,20 @@ async function sendTelegram(
         deep.market_impact
       );
 
+    const thaiSentiment =
+
+      quick.sentiment ===
+      "BULLISH"
+
+        ? "บวก"
+
+        : quick.sentiment ===
+          "BEARISH"
+
+        ? "ลบ"
+
+        : "กลาง";
+
     const emoji =
 
       quick.sentiment ===
@@ -693,7 +740,7 @@ async function sendTelegram(
 📰 <b>${thaiTitle}</b>
 
 ${emoji}
-${quick.sentiment}
+${thaiSentiment}
 
 🔥 Relevance:
 ${quick.relevance}/10
@@ -748,7 +795,7 @@ ${thaiImpact}
 
     console.log(
       "Sent:",
-      news.title
+      thaiTitle
     );
 
   } catch (e) {
@@ -866,7 +913,6 @@ async function checkTelegram() {
       lastUpdateId =
         update.update_id;
 
-      // BUTTONS
       if (
         update.callback_query
       ) {
@@ -918,7 +964,6 @@ ${data}
       const chatId =
         update.message.chat.id;
 
-      // MENU
       if (
         text === "/menu"
       ) {
@@ -930,7 +975,6 @@ ${data}
         continue;
       }
 
-      // STOP
       if (
         text === "/stop"
       ) {
@@ -956,7 +1000,6 @@ ${data}
         continue;
       }
 
-      // START
       if (
         text === "/startnews"
       ) {
@@ -982,7 +1025,6 @@ ${data}
         continue;
       }
 
-      // ASK AI
       if (
         text.startsWith(
           "/ask "
@@ -1062,6 +1104,11 @@ Answer concise and analytical.`
               ?.choices?.[0]
               ?.message?.content;
 
+          const thaiAnswer =
+            await translateText(
+              answer
+            );
+
           await axios.post(
 
 `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
@@ -1072,7 +1119,7 @@ Answer concise and analytical.`
                 chatId,
 
               text:
-                answer
+                thaiAnswer
 
             }
 
@@ -1135,7 +1182,6 @@ setInterval(
         news
       ) {
 
-        // QUICK FILTER
         if (
           !quickFilter(
             item
@@ -1145,14 +1191,12 @@ setInterval(
           continue;
         }
 
-        // QUICK AI
         const quick =
 
           await quickAnalyze(
             item
           );
 
-        // SKIP
         if (
           !quick.important
         ) {
@@ -1160,14 +1204,12 @@ setInterval(
           continue;
         }
 
-        // DEEP AI
         const deep =
 
           await deepAnalyze(
             item
           );
 
-        // SEND
         await sendTelegram(
           item,
           quick,
