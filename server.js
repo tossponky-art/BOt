@@ -129,19 +129,16 @@ async function translateText(text) {
       return "";
     }
 
-    // remove urls
     text = text.replace(
       /https?:\/\/\S+/g,
       ""
     );
 
-    // remove markdown
     text = text.replace(
       /[*_#`]/g,
       ""
     );
 
-    // limit length
     text = text.slice(0, 1500);
 
     const url =
@@ -229,9 +226,11 @@ async function quickAnalyze(
 
     const prompt = `
 
-Analyze this news quickly.
+คุณคือ AI วิเคราะห์ข่าวตลาด
 
-Return ONLY JSON.
+วิเคราะห์เร็ว
+
+ตอบ JSON เท่านั้น
 
 {
  "relevance":0,
@@ -241,7 +240,7 @@ Return ONLY JSON.
  "signal":""
 }
 
-News:
+ข่าว:
 ${news.title}
 
 `;
@@ -339,11 +338,19 @@ async function deepAnalyze(
 
     const prompt = `
 
-You are an elite AI market analyst.
+คุณคือ AI นักลงทุนระดับสูง
 
-Analyze this news deeply.
+วิเคราะห์ข่าวนี้แบบมืออาชีพ
 
-Return ONLY JSON.
+สำคัญมาก:
+- ตอบเป็นภาษาไทยเท่านั้น
+- ห้ามตอบอังกฤษ
+- ห้ามใช้คำ generic
+- วิเคราะห์แบบนักลงทุนจริง
+- concise
+- useful
+
+ตอบ JSON เท่านั้น
 
 {
  "summary":"",
@@ -355,10 +362,30 @@ Return ONLY JSON.
  "signal_strength":0
 }
 
-News:
+ตัวอย่างการตอบที่ดี:
+
+summary:
+"TSMC ได้ประโยชน์จาก demand AI ที่ยังแรง"
+
+short_term:
+"sentiment ยังบวกต่อหุ้น semiconductor"
+
+long_term:
+"AI boom ยังสนับสนุนรายได้ระยะยาว"
+
+risk:
+"valuation เริ่มสูงและการแข่งขันรุนแรงขึ้น"
+
+action:
+"ยังถือได้ แต่ระวังแรงขายทำกำไร"
+
+market_impact:
+"บวกต่อหุ้น AI และ semiconductor"
+
+ข่าว:
 ${news.title}
 
-Details:
+รายละเอียด:
 ${news.summary}
 
 `;
@@ -376,15 +403,18 @@ ${news.summary}
         messages: [
 
           {
+
             role: "user",
+
             content: prompt
+
           }
 
         ],
 
-        temperature: 0.2,
+        temperature: 0.15,
 
-        max_tokens: 600
+        max_tokens: 700
 
       },
 
@@ -429,22 +459,22 @@ ${news.summary}
     return {
 
       summary:
-        "Analysis unavailable",
+        "AI วิเคราะห์ไม่ได้",
 
       market_impact:
-        "Unknown",
+        "ไม่สามารถประเมินได้",
 
       short_term:
-        "Unknown",
+        "ไม่มีข้อมูล",
 
       long_term:
-        "Unknown",
+        "ไม่มีข้อมูล",
 
       risk:
-        "Unknown",
+        "ไม่มีข้อมูล",
 
       action:
-        "Hold",
+        "รอข้อมูลเพิ่มเติม",
 
       signal_strength: 0
 
@@ -677,36 +707,6 @@ async function sendTelegram(
         news.title
       );
 
-    const thaiSummary =
-      await translateText(
-        deep.summary
-      );
-
-    const thaiShort =
-      await translateText(
-        deep.short_term
-      );
-
-    const thaiLong =
-      await translateText(
-        deep.long_term
-      );
-
-    const thaiRisk =
-      await translateText(
-        deep.risk
-      );
-
-    const thaiAction =
-      await translateText(
-        deep.action
-      );
-
-    const thaiImpact =
-      await translateText(
-        deep.market_impact
-      );
-
     const thaiSentiment =
 
       quick.sentiment ===
@@ -748,26 +748,26 @@ ${quick.relevance}/10
 📊 Impact:
 ${quick.impact}/10
 
-⚡ Signal:
+⚡ ความแรงสัญญาณ:
 ${deep.signal_strength}/10
 
 🧠 วิเคราะห์:
-${thaiSummary}
+${deep.summary}
 
 📈 ระยะสั้น:
-${thaiShort}
+${deep.short_term}
 
 📉 ระยะยาว:
-${thaiLong}
+${deep.long_term}
 
 ⚠️ ความเสี่ยง:
-${thaiRisk}
+${deep.risk}
 
 🎯 คำแนะนำ:
-${thaiAction}
+${deep.action}
 
 🌍 ผลต่อตลาด:
-${thaiImpact}
+${deep.market_impact}
 
 🔗 ${news.url}
 
@@ -826,7 +826,7 @@ async function sendMenu(
         chatId,
 
       text:
-        "📡 เลือกหัวข้อ",
+        "📡 เลือกหัวข้อข่าว",
 
       reply_markup: {
 
@@ -942,11 +942,11 @@ async function checkTelegram() {
 
             text:
 
-`✅ เปลี่ยนหัวข้อ:
+`✅ เปลี่ยนหัวข้อเป็น:
 
 ${data}
 
-⚡ AI Signal Engine Activated`
+⚡ AI Signal Engine พร้อมทำงาน`
 
           }
 
@@ -1058,8 +1058,9 @@ ${data}
 
                   content:
 
-`You are an elite AI intelligence assistant.
-Answer concise and analytical.`
+`คุณคือ AI ผู้ช่วยวิเคราะห์ข่าวและตลาดการเงิน
+ตอบเป็นภาษาไทย
+ตอบแบบ concise analytical useful`
 
                 },
 
@@ -1104,11 +1105,6 @@ Answer concise and analytical.`
               ?.choices?.[0]
               ?.message?.content;
 
-          const thaiAnswer =
-            await translateText(
-              answer
-            );
-
           await axios.post(
 
 `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
@@ -1119,7 +1115,7 @@ Answer concise and analytical.`
                 chatId,
 
               text:
-                thaiAnswer
+                answer
 
             }
 
@@ -1264,7 +1260,7 @@ app.get("/", (req, res) => {
 });
 
 // =====================================
-// HEALTH
+// HEALTH CHECK
 // =====================================
 
 app.get("/health", (req, res) => {
